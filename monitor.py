@@ -1,5 +1,3 @@
-# monitor.py (Versi Lengkap Final)
-
 import asyncio
 import json
 import logging
@@ -9,8 +7,9 @@ import requests
 
 import config
 import database
-from image_generator import create_transaction_image # Import fungsi baru kita
+from image_generator import create_transaction_image
 
+# Setup logging untuk melihat aktivitas di terminal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
@@ -47,7 +46,7 @@ def get_price(coingecko_id):
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
         response = requests.get(url)
-        response.raise_for_status()
+        response.raise_for_status() # Akan error jika status code bukan 200
         data = response.json()
         return data[coingecko_id]['usd']
     except Exception as e:
@@ -75,6 +74,7 @@ async def monitor_chain(chain_name, chain_data):
                 logging.info(f"[{chain_name}] Tidak ada wallet untuk dipantau. Cek lagi dalam 60 detik.")
                 await asyncio.sleep(60)
                 continue
+
             logging.info(f"[{chain_name}] Memantau {len(wallets_to_monitor)} wallet...")
             subscribe_request = {
                 "jsonrpc": "2.0", "id": 1, "method": "alchemy_subscribe",
@@ -87,7 +87,10 @@ async def monitor_chain(chain_name, chain_data):
 
                 async for message in websocket:
                     data = json.loads(message)
-                    if 'params' not in data or 'result' not in data['params']: continue
+                    logging.info(f"[{chain_name}] Menerima data dari WebSocket.") # LOG BARU
+                    
+                    if 'params' not in data or 'result' not in data['params']:
+                        continue
                     
                     tx = data['params']['result']
                     tx_hash, from_addr, to_addr = tx.get('hash'), tx.get('from'), tx.get('to')
@@ -95,9 +98,11 @@ async def monitor_chain(chain_name, chain_data):
                     value_native = value_wei / 1e18
 
                     triggered_address = ""
-                    if from_addr in wallets_to_monitor: triggered_address = from_addr
-                    elif to_addr in wallets_to_monitor: triggered_address = to_addr
+                    if from_addr.lower() in wallets_to_monitor: triggered_address = from_addr
+                    elif to_addr.lower() in wallets_to_monitor: triggered_address = to_addr
                     if not triggered_address: continue
+                    
+                    logging.info(f"[{chain_name}] Transaksi relevan terdeteksi: {tx_hash}") # LOG BARU
 
                     is_outgoing = triggered_address.lower() == from_addr.lower()
                     
@@ -122,9 +127,11 @@ async def monitor_chain(chain_name, chain_data):
                         if is_outgoing: continue
                         tx_data['amount_text'] = "Token / NFT Transfer"
                     
+                    logging.info(f"[{chain_name}] Mempersiapkan data untuk membuat gambar.") # LOG BARU
                     image_buffer = create_transaction_image(tx_data)
 
                     if image_buffer:
+                        logging.info(f"[{chain_name}] Gambar berhasil dibuat. Mempersiapkan untuk mengirim...") # LOG BARU
                         caption = f"Transaksi terdeteksi di jaringan {chain_name.title()} untuk wallet <code>{triggered_address}</code>"
                         users_to_notify = database.get_users_for_wallet(triggered_address, chain_name)
                         for user_id in users_to_notify:
@@ -134,13 +141,16 @@ async def monitor_chain(chain_name, chain_data):
                                 image_buffer.seek(0)
                             except Exception as e:
                                 logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
+                    else:
+                        logging.warning(f"[{chain_name}] Gagal membuat gambar (image_buffer is None). Notifikasi tidak dikirim.") # LOG BARU
 
         except Exception as e:
             logging.error(f"[{chain_name}] Error pada monitor: {e}. Mencoba koneksi ulang...")
             await asyncio.sleep(15)
 
 async def main():
-    logging.info("Memulai Mesin Pemantau (Versi Gambar)...")
+    """Fungsi utama yang menjalankan semua monitor."""
+    logging.info("Memulai Mesin Pemantau (Versi Gambar & Debug)...")
     database.setup_database()
     active_chains = database.get_active_chains()
     tasks = []
@@ -152,8 +162,10 @@ async def main():
         else:
             logging.warning(f"Konfigurasi untuk jaringan '{chain}' tidak ditemukan di CHAIN_CONFIG. Melewati.")
     
-    if tasks: await asyncio.gather(*tasks)
-    else: logging.info("Tidak ada jaringan aktif yang dikenali untuk dipantau saat ini.")
+    if tasks:
+        await asyncio.gather(*tasks)
+    else:
+        logging.info("Tidak ada jaringan aktif yang dikenali untuk dipantau saat ini.")
 
 if __name__ == "__main__":
     asyncio.run(main())
