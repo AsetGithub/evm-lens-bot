@@ -14,12 +14,34 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
 # Konfigurasi untuk setiap jaringan
+# Kamus konfigurasi final dengan semua jaringan yang didukung
 CHAIN_CONFIG = {
-    'ethereum': {'explorer_url': 'https://etherscan.io'},
-    'polygon': {'explorer_url': 'https://polygonscan.com'},
-    'bsc': {'explorer_url': 'https://bscscan.com'},
-    'base': {'explorer_url': 'https://basescan.org'}, # TAMBAHKAN INI
-    'worldchain': {'explorer_url': 'https://etherscan.io'} # Placeholder
+    # == Top Tier & L2s Utama ==
+    'ethereum': {'explorer_url': 'https://etherscan.io', 'wss_subdomain': 'eth-mainnet'},
+    'polygon': {'explorer_url': 'https://polygonscan.com', 'wss_subdomain': 'polygon-mainnet'},
+    'bsc': {'explorer_url': 'https://bscscan.com', 'wss_subdomain': 'bsc-mainnet'},
+    'arbitrum': {'explorer_url': 'https://arbiscan.io', 'wss_subdomain': 'arb-mainnet'},
+    'optimism': {'explorer_url': 'https://optimistic.etherscan.io', 'wss_subdomain': 'opt-mainnet'},
+    'base': {'explorer_url': 'https://basescan.org', 'wss_subdomain': 'base-mainnet'},
+    'avalanche': {'explorer_url': 'https://snowtrace.io', 'wss_subdomain': 'avax-mainnet'},
+    'zksync': {'explorer_url': 'https://explorer.zksync.io', 'wss_subdomain': 'zksync-mainnet'},
+    'linea': {'explorer_url': 'https://lineascan.build', 'wss_subdomain': 'linea-mainnet'},
+    'scroll': {'explorer_url': 'https://scrollscan.com', 'wss_subdomain': 'scroll-mainnet'},
+    'blast': {'explorer_url': 'https://blastscan.io', 'wss_subdomain': 'blast-mainnet'},
+    'mantle': {'explorer_url': 'https://mantlescan.xyz', 'wss_subdomain': 'mantle-mainnet'},
+
+    # == L1 Populer Lainnya ==
+    'fantom': {'explorer_url': 'https://ftmscan.com', 'wss_subdomain': 'fantom-mainnet'},
+    'cronos': {'explorer_url': 'https://cronoscan.com', 'wss_subdomain': 'cronos-mainnet'},
+    'gnosis': {'explorer_url': 'https://gnosisscan.io', 'wss_subdomain': 'gnosis-mainnet'},
+    'celo': {'explorer_url': 'https://celoscan.io', 'wss_subdomain': 'celo-mainnet'},
+    'astar': {'explorer_url': 'https://astar.subscan.io', 'wss_subdomain': 'astar-mainnet'},
+    'metis': {'explorer_url': 'https://andromeda-explorer.metis.io', 'wss_subdomain': 'metis-mainnet'},
+    
+    # == Jaringan Spesifik Komunitas ==
+    'degen': {'explorer_url': 'https://explorer.degen.tips', 'wss_subdomain': 'degen-mainnet'},
+    'zora': {'explorer_url': 'https://explorer.zora.energy', 'wss_subdomain': 'zora-mainnet'},
+    'opbnb': {'explorer_url': 'https://opbnb.bscscan.com', 'wss_subdomain': 'opbnb-mainnet'},
 }
 
 async def send_notification(user_ids, message):
