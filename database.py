@@ -70,3 +70,30 @@ def get_active_chains():
     chains = [row[0] for row in cursor.fetchall()]
     conn.close()
     return chains
+
+
+
+
+# (kode yang sudah ada di atas biarkan saja)
+
+def get_wallets_by_user(user_id):
+    """Mengambil semua wallet yang dipantau oleh seorang pengguna."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    # Kita ambil id, alamat, dan chain untuk ditampilkan dan dihapus
+    cursor.execute("SELECT id, wallet_address, chain FROM wallets WHERE user_id = ?", (user_id,))
+    wallets = cursor.fetchall()
+    conn.close()
+    return wallets
+
+def remove_wallet_by_id(wallet_id, user_id):
+    """Menghapus wallet berdasarkan ID uniknya dan memastikan user_id cocok."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    # Menambahkan user_id di klausa WHERE untuk keamanan, agar pengguna tidak bisa menghapus wallet orang lain
+    cursor.execute("DELETE FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
+    # rowcount akan bernilai 1 jika berhasil, 0 jika gagal (ID tidak ditemukan atau bukan milik user)
+    success = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return success
