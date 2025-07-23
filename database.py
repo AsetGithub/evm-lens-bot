@@ -58,3 +58,15 @@ def get_users_for_wallet(wallet_address, chain):
     user_ids = [row[0] for row in cursor.fetchall()]
     conn.close()
     return user_ids
+    
+    
+    # (kode yang sudah ada di atas biarkan saja)
+
+def get_active_chains():
+    """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT chain FROM wallets")
+    chains = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return chains
