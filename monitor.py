@@ -46,7 +46,7 @@ def get_price(coingecko_id):
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
         response = requests.get(url)
-        response.raise_for_status() # Akan error jika status code bukan 200
+        response.raise_for_status()
         data = response.json()
         return data[coingecko_id]['usd']
     except Exception as e:
@@ -87,22 +87,30 @@ async def monitor_chain(chain_name, chain_data):
 
                 async for message in websocket:
                     data = json.loads(message)
-                    logging.info(f"[{chain_name}] Menerima data dari WebSocket.") # LOG BARU
+                    logging.info(f"[{chain_name}] Menerima data dari WebSocket.")
                     
                     if 'params' not in data or 'result' not in data['params']:
                         continue
                     
                     tx = data['params']['result']
                     tx_hash, from_addr, to_addr = tx.get('hash'), tx.get('from'), tx.get('to')
+
+                    if not all([tx_hash, from_addr, to_addr]):
+                        continue
+
                     value_wei = int(tx.get('value', '0x0'), 16)
                     value_native = value_wei / 1e18
 
                     triggered_address = ""
-                    if from_addr.lower() in wallets_to_monitor: triggered_address = from_addr
-                    elif to_addr.lower() in wallets_to_monitor: triggered_address = to_addr
-                    if not triggered_address: continue
+                    if from_addr.lower() in wallets_to_monitor:
+                        triggered_address = from_addr
+                    elif to_addr.lower() in wallets_to_monitor:
+                        triggered_address = to_addr
                     
-                    logging.info(f"[{chain_name}] Transaksi relevan terdeteksi: {tx_hash}") # LOG BARU
+                    if not triggered_address:
+                        continue
+                    
+                    logging.info(f"[{chain_name}] Transaksi relevan terdeteksi: {tx_hash}")
 
                     is_outgoing = triggered_address.lower() == from_addr.lower()
                     
@@ -127,11 +135,11 @@ async def monitor_chain(chain_name, chain_data):
                         if is_outgoing: continue
                         tx_data['amount_text'] = "Token / NFT Transfer"
                     
-                    logging.info(f"[{chain_name}] Mempersiapkan data untuk membuat gambar.") # LOG BARU
+                    logging.info(f"[{chain_name}] Mempersiapkan data untuk membuat gambar.")
                     image_buffer = create_transaction_image(tx_data)
 
                     if image_buffer:
-                        logging.info(f"[{chain_name}] Gambar berhasil dibuat. Mempersiapkan untuk mengirim...") # LOG BARU
+                        logging.info(f"[{chain_name}] Gambar berhasil dibuat. Mempersiapkan untuk mengirim...")
                         caption = f"Transaksi terdeteksi di jaringan {chain_name.title()} untuk wallet <code>{triggered_address}</code>"
                         users_to_notify = database.get_users_for_wallet(triggered_address, chain_name)
                         for user_id in users_to_notify:
@@ -142,7 +150,7 @@ async def monitor_chain(chain_name, chain_data):
                             except Exception as e:
                                 logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
                     else:
-                        logging.warning(f"[{chain_name}] Gagal membuat gambar (image_buffer is None). Notifikasi tidak dikirim.") # LOG BARU
+                        logging.warning(f"[{chain_name}] Gagal membuat gambar (image_buffer is None). Notifikasi tidak dikirim.")
 
         except Exception as e:
             logging.error(f"[{chain_name}] Error pada monitor: {e}. Mencoba koneksi ulang...")
@@ -150,7 +158,7 @@ async def monitor_chain(chain_name, chain_data):
 
 async def main():
     """Fungsi utama yang menjalankan semua monitor."""
-    logging.info("Memulai Mesin Pemantau (Versi Gambar & Debug)...")
+    logging.info("Memulai Mesin Pemantau (Versi Perbaikan Final)...")
     database.setup_database()
     active_chains = database.get_active_chains()
     tasks = []
