@@ -1,34 +1,33 @@
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import io
+import logging # Tambahkan ini
 
 # Konfigurasi gambar
 IMG_WIDTH = 800
 IMG_HEIGHT = 450
-FONT_FILE = "PermanentMarker-Regular.ttf" # Menggunakan nama file font Anda
+FONT_FILE = "PermanentMarker-Regular.ttf" # Pastikan nama ini sama persis dengan file Anda
 
 def create_transaction_image(tx_data):
     """
     Membuat gambar kuitansi transaksi dari data yang diberikan.
-    tx_data adalah dictionary yang berisi semua info transaksi.
     """
     try:
+        logging.info("Mencoba membuat gambar kuitansi...")
         # Siapkan font
         font_title = ImageFont.truetype(FONT_FILE, size=32)
         font_main = ImageFont.truetype(FONT_FILE, size=24)
         font_small = ImageFont.truetype(FONT_FILE, size=18)
+        logging.info(f"Font '{FONT_FILE}' berhasil dimuat.")
 
         # Buat kanvas gambar
         image = Image.new('RGB', (IMG_WIDTH, IMG_HEIGHT), color='#1E1E2E')
         draw = ImageDraw.Draw(image)
 
         # --- Gambar Konten ---
-        
-        # Judul
         draw.text((40, 30), "Transaction Receipt", fill='#F5C2E7', font=font_title)
         draw.line([(40, 75), (IMG_WIDTH - 40, 75)], fill='#45475A', width=2)
 
-        # Detail Transaksi
         y_pos = 100
         draw.text((40, y_pos), "Chain:", fill='#A6ADC8', font=font_main)
         draw.text((180, y_pos), tx_data['chain'].title(), fill='#F9E2AF', font=font_main)
@@ -60,13 +59,16 @@ def create_transaction_image(tx_data):
         draw.text((IMG_WIDTH - 188, 255), "Scan for Details", fill='#A6ADC8', font=font_small)
 
         # --- Simpan ke Memori ---
-        # Kita tidak simpan ke file fisik, tapi ke buffer memori agar lebih cepat
         image_buffer = io.BytesIO()
         image.save(image_buffer, format='PNG')
-        image_buffer.seek(0) # Pindahkan pointer ke awal buffer
-
+        image_buffer.seek(0)
+        
+        logging.info("Gambar kuitansi berhasil dibuat dan disimpan ke buffer.")
         return image_buffer
 
+    except FileNotFoundError:
+        logging.error(f"FATAL: File font '{FONT_FILE}' tidak ditemukan! Pastikan file ada di repositori.")
+        return None
     except Exception as e:
-        print(f"Gagal membuat gambar: {e}")
+        logging.error(f"Gagal membuat gambar: {e}")
         return None
