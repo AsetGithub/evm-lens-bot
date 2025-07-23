@@ -18,7 +18,7 @@ CHAIN_CONFIG = {
     'ethereum': {'explorer_url': 'https://etherscan.io'},
     'polygon': {'explorer_url': 'https://polygonscan.com'},
     'bsc': {'explorer_url': 'https://bscscan.com'},
-    # Tambahkan jaringan lain di sini jika diperlukan
+    'base': {'explorer_url': 'https://basescan.org'}, # TAMBAHKAN INI
     'worldchain': {'explorer_url': 'https://etherscan.io'} # Placeholder
 }
 
