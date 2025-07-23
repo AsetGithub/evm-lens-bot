@@ -1,12 +1,15 @@
+# monitor.py (Versi Lengkap Final)
+
 import asyncio
 import json
 import logging
 from telegram import Bot
 import websockets
-import requests # Import library baru
+import requests
 
 import config
 import database
+from image_generator import create_transaction_image # Import fungsi baru kita
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 bot = Bot(token=config.TELEGRAM_TOKEN)
@@ -14,7 +17,6 @@ bot = Bot(token=config.TELEGRAM_TOKEN)
 # Kamus konfigurasi final dengan semua jaringan yang didukung + data harga
 CHAIN_CONFIG = {
     # == Top Tier & L2s Utama ==
-    # L2s ini menggunakan ETH sebagai token gas, jadi kita pantau harga Ethereum
     'ethereum': {'explorer_url': 'https://etherscan.io', 'wss_subdomain': 'eth-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'arbitrum': {'explorer_url': 'https://arbiscan.io', 'wss_subdomain': 'arb-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'optimism': {'explorer_url': 'https://optimistic.etherscan.io', 'wss_subdomain': 'opt-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
@@ -45,7 +47,7 @@ def get_price(coingecko_id):
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
         response = requests.get(url)
-        response.raise_for_status() # Akan error jika status code bukan 200
+        response.raise_for_status()
         data = response.json()
         return data[coingecko_id]['usd']
     except Exception as e:
@@ -56,15 +58,15 @@ async def send_notification(user_ids, message):
     for user_id in user_ids:
         try:
             await bot.send_message(chat_id=user_id, text=message, parse_mode='HTML')
-            logging.info(f"Notifikasi terkirim ke user {user_id}")
+            logging.info(f"Notifikasi teks terkirim ke user {user_id}")
         except Exception as e:
-            logging.error(f"Gagal mengirim notifikasi ke user {user_id}: {e}")
+            logging.error(f"Gagal mengirim notifikasi teks ke user {user_id}: {e}")
 
 async def monitor_chain(chain_name, chain_data):
     wss_url = f"wss://{chain_data['wss_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     explorer_url = chain_data['explorer_url']
-    coingecko_id = chain_data['coingecko_id']
-    symbol = chain_data['symbol']
+    coingecko_id = chain_data.get('coingecko_id')
+    symbol = chain_data.get('symbol', 'Token')
     
     while True:
         try:
@@ -73,7 +75,6 @@ async def monitor_chain(chain_name, chain_data):
                 logging.info(f"[{chain_name}] Tidak ada wallet untuk dipantau. Cek lagi dalam 60 detik.")
                 await asyncio.sleep(60)
                 continue
-
             logging.info(f"[{chain_name}] Memantau {len(wallets_to_monitor)} wallet...")
             subscribe_request = {
                 "jsonrpc": "2.0", "id": 1, "method": "alchemy_subscribe",
@@ -91,43 +92,56 @@ async def monitor_chain(chain_name, chain_data):
                     tx = data['params']['result']
                     tx_hash, from_addr, to_addr = tx.get('hash'), tx.get('from'), tx.get('to')
                     value_wei = int(tx.get('value', '0x0'), 16)
-                    value_native = value_wei / 1e18 # nilai dalam token native (ETH, MATIC, dll)
-
-                    # Hanya proses jika nilai lebih dari 0
-                    if value_native == 0: continue
+                    value_native = value_wei / 1e18
 
                     triggered_address = ""
                     if from_addr in wallets_to_monitor: triggered_address = from_addr
                     elif to_addr in wallets_to_monitor: triggered_address = to_addr
                     if not triggered_address: continue
 
-                    # Ambil harga dan hitung nilai USD
-                    price_usd = get_price(coingecko_id)
-                    value_usd_text = ""
-                    if price_usd:
-                        value_usd = value_native * price_usd
-                        value_usd_text = f" (~${value_usd:,.2f} USD)"
+                    is_outgoing = triggered_address.lower() == from_addr.lower()
+                    
+                    tx_data = {
+                        'chain': chain_name,
+                        'direction': "➡️ KELUAR" if is_outgoing else "✅ MASUK",
+                        'color': '#F38BA8' if is_outgoing else '#A6E3A1',
+                        'from_addr': f"{from_addr[:8]}...{from_addr[-6:]}",
+                        'to_addr': f"{to_addr[:8]}...{to_addr[-6:]}",
+                        'tx_hash': tx_hash,
+                        'explorer_url': explorer_url
+                    }
+                    
+                    if value_native > 0:
+                        price_usd = get_price(coingecko_id) if coingecko_id else None
+                        value_usd_text = ""
+                        if price_usd:
+                            value_usd = value_native * price_usd
+                            value_usd_text = f" (~${value_usd:,.2f} USD)"
+                        tx_data['amount_text'] = f"{value_native:.6f} {symbol}{value_usd_text}"
+                    else:
+                        if is_outgoing: continue
+                        tx_data['amount_text'] = "Token / NFT Transfer"
+                    
+                    image_buffer = create_transaction_image(tx_data)
 
-                    direction = "➡️ KELUAR" if triggered_address == from_addr else "✅ MASUK"
-                    notification_message = (
-                        f"<b>🔔 Notifikasi Transaksi Baru ({chain_name.title()})</b>\n\n"
-                        f"Wallet: <code>{triggered_address}</code>\n"
-                        f"Tipe: {direction}\n"
-                        f"Jumlah: {value_native:.6f} {symbol}{value_usd_text}\n"
-                        f"Dari: <code>{from_addr}</code>\n"
-                        f"Ke: <code>{to_addr}</code>\n\n"
-                        f"<a href='{explorer_url}/tx/{tx_hash}'>Lihat di Explorer</a>"
-                    )
-                    users_to_notify = database.get_users_for_wallet(triggered_address, chain_name)
-                    await send_notification(users_to_notify, notification_message)
+                    if image_buffer:
+                        caption = f"Transaksi terdeteksi di jaringan {chain_name.title()} untuk wallet <code>{triggered_address}</code>"
+                        users_to_notify = database.get_users_for_wallet(triggered_address, chain_name)
+                        for user_id in users_to_notify:
+                            try:
+                                await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
+                                logging.info(f"Kuitansi gambar terkirim ke user {user_id}")
+                                image_buffer.seek(0)
+                            except Exception as e:
+                                logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
 
         except Exception as e:
             logging.error(f"[{chain_name}] Error pada monitor: {e}. Mencoba koneksi ulang...")
             await asyncio.sleep(15)
 
-# (Sisa kode main() sama persis, tidak perlu diubah)
 async def main():
-    logging.info("Memulai Mesin Pemantau Multi-Jaringan (Versi Harga)...")
+    logging.info("Memulai Mesin Pemantau (Versi Gambar)...")
+    database.setup_database()
     active_chains = database.get_active_chains()
     tasks = []
     for chain in active_chains:
