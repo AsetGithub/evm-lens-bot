@@ -78,7 +78,7 @@ async def monitor_chain(chain_name, chain_data):
             logging.info(f"[{chain_name}] Memantau {len(wallets_to_monitor)} wallet...")
             subscribe_request = {
                 "jsonrpc": "2.0", "id": 1, "method": "alchemy_subscribe",
-                "params": ["alchemy_pendingTransactions", {"toAddress": wallets_to_monitor, "fromAddress": wallets_to_monitor}]
+                "params": ["alchemy_minedTransactions", {"toAddress": wallets_to_monitor, "fromAddress": wallets_to_monitor}]
             }
 
             async with websockets.connect(wss_url) as websocket:
