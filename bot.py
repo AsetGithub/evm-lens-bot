@@ -1,10 +1,14 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
+    filters, ConversationHandler
+)
 
 # Impor dari file kita sendiri
 import config
 import database
+from monitor import CHAIN_CONFIG # Kita impor konfigurasi jaringan
 
 # Setup logging
 logging.basicConfig(
@@ -12,25 +16,40 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Definisikan state untuk ConversationHandler
-CHAIN, ADDRESS = range(2)
+# Definisikan state untuk alur percakapan
+GET_ADDRESS, SELECT_CHAIN = range(2)
 
-# Fungsi untuk membuat menu utama
+# --- Fungsi Menu & Tombol ---
+
 def get_main_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("➕ Tambah Wallet", callback_data='add_wallet')],
-        # Tombol lain akan kita tambahkan di sini nanti
-        # [InlineKeyboardButton("📂 Wallet Saya", callback_data='my_wallets')],
-        # [InlineKeyboardButton("🗑️ Hapus Wallet", callback_data='remove_wallet')],
-    ]
+    """Membuat keyboard untuk menu utama."""
+    keyboard = [[InlineKeyboardButton("➕ Tambah Wallet untuk Dipantau", callback_data='add_wallet_start')]]
     return InlineKeyboardMarkup(keyboard)
 
-# Fungsi untuk perintah /start dan tombol kembali
-async def start(update: Update, context):
-    user = update.effective_user
-    text = f"Halo {user.mention_html()}!\n\nSaya EVM Lens Bot, siap membantumu memantau wallet. Silakan pilih menu di bawah."
+def get_network_keyboard():
+    """Membuat keyboard pilihan jaringan secara dinamis dari CHAIN_CONFIG."""
+    keyboard = []
+    # Membuat 3 tombol per baris
+    row = []
+    for chain in CHAIN_CONFIG.keys():
+        row.append(InlineKeyboardButton(chain.title(), callback_data=f"chain_{chain}"))
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
     
-    # Jika dari callback query (tombol), edit pesan. Jika dari command, kirim pesan baru.
+    keyboard.append([InlineKeyboardButton("❌ Batalkan", callback_data='cancel')])
+    return InlineKeyboardMarkup(keyboard)
+
+# --- Fungsi Handler Utama ---
+
+async def start(update: Update, context):
+    """Mengirim pesan selamat datang dengan menu utama."""
+    user = update.effective_user
+    text = f"Halo {user.mention_html()}!\n\nSaya EVM Lens Bot, siap membantumu. Pilih menu di bawah untuk memulai."
+    
+    # Menangani jika ini adalah callback dari tombol
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -38,63 +57,86 @@ async def start(update: Update, context):
     else:
         await update.message.reply_html(text, reply_markup=get_main_menu_keyboard())
     
-    return -1 # Akhiri percakapan jika ada
+    # Pastikan percakapan sebelumnya selesai
+    return ConversationHandler.END
 
-# Fungsi yang dipanggil saat tombol 'add_wallet' ditekan
+# --- Alur Percakapan Tambah Wallet ---
+
 async def add_wallet_start(update: Update, context):
+    """Langkah 1: Memulai alur, meminta alamat wallet."""
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(text="Silakan masukkan nama jaringan (misalnya: polygon, bsc, ethereum):")
-    return CHAIN
+    await query.edit_message_text(text="Oke, silakan kirim alamat wallet (contoh: 0x...) yang ingin Anda pantau.")
+    return GET_ADDRESS
 
-# Fungsi untuk menerima nama jaringan
-async def received_chain(update: Update, context):
-    context.user_data['chain'] = update.message.text.lower()
-    await update.message.reply_text(f"Jaringan '{context.user_data['chain']}' diterima. Sekarang, silakan masukkan alamat wallet:")
-    return ADDRESS
-
-# Fungsi untuk menerima alamat dan menyimpan ke DB
-async def received_address(update: Update, context):
-    user_id = update.effective_user.id
+async def get_address(update: Update, context):
+    """Langkah 2: Menerima alamat, menyimpan sementara, dan meminta pilih jaringan."""
     address = update.message.text
-    chain = context.user_data['chain']
+    # Simpan alamat di data pengguna sementara
+    context.user_data['wallet_address_to_add'] = address
+    
+    await update.message.reply_text(
+        f"Alamat diterima! Sekarang pilih satu jaringan untuk memantau <code>{address}</code>:",
+        reply_markup=get_network_keyboard(),
+        parse_mode='HTML'
+    )
+    return SELECT_CHAIN
+
+async def select_chain(update: Update, context):
+    """Langkah 3: Menerima pilihan jaringan, menyimpan ke DB, dan mengakhiri."""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    address = context.user_data.get('wallet_address_to_add')
+    chain = query.data.split('_')[1] # Ambil nama chain dari callback_data 'chain_polygon'
+
+    if not address:
+        await query.edit_message_text(
+            "Terjadi kesalahan, alamat tidak ditemukan. Silakan mulai lagi.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return ConversationHandler.END
 
     success = database.add_wallet(user_id, address, chain)
     if success:
-        await update.message.reply_text(f"✅ Wallet {address} di jaringan {chain} berhasil ditambahkan!")
+        await query.edit_message_text(f"✅ Berhasil! Wallet <code>{address}</code> sekarang dipantau di jaringan {chain.title()}.", parse_mode='HTML')
     else:
-        await update.message.reply_text(f"ℹ️ Wallet {address} sudah ada di daftar pantauan Anda.")
+        await query.edit_message_text(f"ℹ️ Wallet <code>{address}</code> sudah ada di daftar pantauan Anda untuk jaringan {chain.title()}.", parse_mode='HTML')
+
+    # Tampilkan kembali menu utama setelah selesai
+    # Kita panggil fungsi start lagi dengan cara yang sedikit berbeda
+    await start(update, context)
     
-    # Tampilkan menu utama lagi
-    await start(update, context)
-    return -1 # Akhiri percakapan
+    return ConversationHandler.END
 
-# Fungsi untuk membatalkan proses
 async def cancel(update: Update, context):
-    await update.message.reply_text("Proses dibatalkan.")
-    await start(update, context)
-    return -1
+    """Membatalkan alur percakapan."""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Proses penambahan wallet dibatalkan.", reply_markup=get_main_menu_keyboard())
+    return ConversationHandler.END
 
+# --- Main ---
 def main():
+    """Fungsi utama untuk menjalankan bot."""
     database.setup_database()
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
 
-    # Conversation handler untuk proses tambah wallet
-    add_wallet_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(add_wallet_start, pattern='^add_wallet$')],
+    # Conversation handler untuk proses tambah wallet yang interaktif
+    conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_wallet_start, pattern='^add_wallet_start$')],
         states={
-            CHAIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_chain)],
-            ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_address)],
+            GET_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_address)],
+            SELECT_CHAIN: [CallbackQueryHandler(select_chain, pattern='^chain_')],
         },
-        fallbacks=[CommandHandler('start', start)]
+        fallbacks=[CallbackQueryHandler(cancel, pattern='^cancel$'), CommandHandler('start', start)]
     )
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(add_wallet_conv)
-    # Handler untuk tombol kembali ke menu utama dari state lain (jika ada)
-    application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
-
-    print("Bot sedang berjalan dengan fitur interaktif...")
+    application.add_handler(conv_handler)
+    
+    print("Bot berjalan dengan menu interaktif multi-jaringan...")
     application.run_polling()
 
 if __name__ == '__main__':
