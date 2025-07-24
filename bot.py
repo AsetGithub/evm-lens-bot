@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan /help dan pembaruan lainnya)
+# bot.py (Versi Final dengan /help dan link Telegraph)
 
 import logging
 import requests
@@ -21,7 +21,6 @@ logging.basicConfig(
 GET_ADDRESS, SELECT_CHAIN, GET_ALIAS = range(3)
 SET_MIN_VALUE = range(3, 4)
 
-# --- (Semua fungsi dari make_rpc_request hingga start tetap sama) ---
 def make_rpc_request(rpc_url, method, params):
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     try:
@@ -45,6 +44,7 @@ def get_main_menu_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_network_keyboard(callback_prefix):
+    """Membuat keyboard jaringan dengan prefix callback yang berbeda."""
     keyboard = []
     row = []
     for chain in CHAIN_CONFIG.keys():
@@ -66,16 +66,16 @@ async def start(update: Update, context):
 
 # --- Perintah Bantuan /help (BARU) ---
 async def help_command(update: Update, context):
-    # GANTI "LINK_TELEGRAPH_ANDA" DENGAN LINK YANG SUDAH ANDA BUAT
-    telegraph_url = "LINK_TELEGRAPH_ANDA" 
+    # Link Telegraph Anda sudah dimasukkan di sini
+    telegraph_url = "https://telegra.ph/Selamat-Datang-di-EVM-Lens-Bot-Beta-07-24" 
     
     text = (
         "❓ **Bantuan EVM Lens Bot**\n\n"
-        "Berikut adalah daftar perintah dan fungsi yang bisa Anda gunakan:\n\n"
-        "🔹 **Tambah/Hapus Wallet:** Gunakan tombol di menu utama untuk mengelola daftar wallet yang Anda pantau.\n\n"
-        "🔹 **Cek Portfolio:** Lihat daftar lengkap Token (ERC-20) dan koleksi NFT yang Anda miliki.\n\n"
-        "🔹 **Pengaturan Notifikasi:** Atur preferensi notifikasi Anda, seperti nilai minimum transaksi atau mematikan notifikasi airdrop.\n\n"
-        "🔹 **Cek Gas Fee:** Periksa biaya transaksi di berbagai jaringan secara real-time.\n\n"
+        "Berikut adalah fungsi utama yang bisa Anda gunakan melalui menu:\n\n"
+        "🔹 **Tambah/Hapus Wallet:** Kelola daftar wallet yang Anda pantau.\n"
+        "🔹 **Cek Portfolio:** Lihat daftar lengkap Token (ERC-20) dan koleksi NFT.\n"
+        "🔹 **Pengaturan Notifikasi:** Atur preferensi notifikasi Anda.\n"
+        "🔹 **Cek Gas Fee:** Periksa biaya transaksi di berbagai jaringan.\n\n"
         "Untuk informasi lebih detail, roadmap, dan info tentang author, silakan kunjungi halaman informasi kami."
     )
     
@@ -83,7 +83,6 @@ async def help_command(update: Update, context):
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-# --- (Sisa kode dari add_wallet_start hingga akhir tetap sama persis) ---
 async def add_wallet_start(update: Update, context):
     query = update.callback_query; await query.answer()
     await query.edit_message_text(text="✍️ Oke, kirim alamat wallet (contoh: 0x...) yang ingin Anda pantau.")
@@ -363,3 +362,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
