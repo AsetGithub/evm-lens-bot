@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan Alias & Settings - Lengkap)
+# bot.py (Versi Final dengan Perbaikan Tampilan Alias)
 
 import logging
 import requests
@@ -100,7 +100,10 @@ async def my_wallets(update: Update, context):
     wallets = database.get_wallets_by_user(update.effective_user.id)
     text = "📂 **Wallet Anda:**\n\n" if wallets else "Anda belum menambahkan wallet."
     for _, address, chain, alias in wallets:
-        text += f"🔹 **{alias}** ({chain.title()})\n   └ <code>{address}</code>\n"
+        # --- PERBAIKAN DI SINI ---
+        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
+        # --- AKHIR PERBAIKAN ---
+        text += f"🔹 **{display_name}** ({chain.title()})\n   └ <code>{address}</code>\n"
     keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
@@ -110,7 +113,10 @@ async def remove_wallet_menu(update: Update, context):
     if not wallets:
         await query.edit_message_text("Tidak ada wallet untuk dihapus.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
-    keyboard = [[InlineKeyboardButton(f"❌ Hapus '{alias}' ({c.title()})", callback_data=f"delete_{wid}")] for wid, a, c, alias in wallets]
+    keyboard = []
+    for wid, address, chain, alias in wallets:
+        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
+        keyboard.append([InlineKeyboardButton(f"❌ Hapus '{display_name}' ({chain.title()})", callback_data=f"delete_{wid}")])
     keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')])
     await query.edit_message_text("Pilih wallet yang ingin dihapus:", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -127,7 +133,10 @@ async def portfolio_start(update: Update, context):
     if not wallets:
         await query.edit_message_text("Anda belum memiliki wallet untuk dilihat.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
-    keyboard = [[InlineKeyboardButton(f"{alias} ({c.title()})", callback_data=f"portfolio_select_{c}_{a}")] for _, a, c, alias in wallets]
+    keyboard = []
+    for _, address, chain, alias in wallets:
+        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
+        keyboard.append([InlineKeyboardButton(f"{display_name} ({chain.title()})", callback_data=f"portfolio_select_{chain}_{address}")])
     keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')])
     await query.edit_message_text("Pilih wallet yang ingin Anda lihat portfolionya:", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -151,7 +160,7 @@ async def portfolio_select_asset_type(update: Update, context):
 
 async def get_portfolio_erc20(update: Update, context):
     query = update.callback_query; await query.answer()
-    await query.edit_message_text("⏳ Sedang mengambil data token, mohon tunggu...")
+    await query.edit_message_text("⏳ Sedang mengambil data token...")
     _, _, chain, address = query.data.split('_', 3)
     chain_data = CHAIN_CONFIG.get(chain, {}); explorer_url = chain_data.get('explorer_url')
     rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
@@ -178,7 +187,7 @@ async def get_portfolio_erc20(update: Update, context):
 
 async def get_portfolio_nft(update: Update, context):
     query = update.callback_query; await query.answer()
-    await query.edit_message_text("⏳ Sedang mengambil data NFT, mohon tunggu...")
+    await query.edit_message_text("⏳ Sedang mengambil data NFT...")
     _, _, chain, address = query.data.split('_', 3)
     network_subdomain = CHAIN_CONFIG.get(chain, {}).get('rpc_subdomain')
     explorer_url = CHAIN_CONFIG.get(chain, {}).get('explorer_url')
@@ -238,7 +247,7 @@ async def set_min_value_received(update: Update, context):
         await update.message.reply_text(f"✅ Nilai minimum berhasil diatur ke ${value}.")
     except ValueError:
         await update.message.reply_text("❌ Input tidak valid. Harap masukkan angka.")
-    await start(update, context) # Kembali ke menu utama
+    await start(update, context)
     return ConversationHandler.END
 
 async def toggle_airdrop(update: Update, context):
@@ -252,7 +261,6 @@ async def toggle_airdrop(update: Update, context):
 def main():
     database.setup_database()
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
-
     add_wallet_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(add_wallet_start, pattern='^add_wallet_start$')],
         states={
@@ -262,13 +270,11 @@ def main():
         },
         fallbacks=[CommandHandler('start', start), CallbackQueryHandler(start, pattern='^main_menu$')]
     )
-    
     settings_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_min_value_start, pattern='^set_min_value_start$')],
         states={ SET_MIN_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_min_value_received)] },
         fallbacks=[CommandHandler('start', start), CallbackQueryHandler(start, pattern='^main_menu$')]
     )
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(add_wallet_conv)
     application.add_handler(settings_conv)
@@ -282,7 +288,6 @@ def main():
     application.add_handler(CallbackQueryHandler(settings_menu, pattern='^settings_menu$'))
     application.add_handler(CallbackQueryHandler(toggle_airdrop, pattern='^toggle_airdrop$'))
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
-    
     print("Bot berjalan dengan fitur Alias & Settings...")
     application.run_polling()
 
