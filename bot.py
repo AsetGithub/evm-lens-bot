@@ -1,4 +1,4 @@
-# bot.py (Versi dengan Fitur Portfolio)
+# bot.py (Versi dengan Upgrade Portfolio Detail)
 
 import logging
 import requests
@@ -20,7 +20,7 @@ logging.basicConfig(
 # Definisikan state untuk alur percakapan
 GET_ADDRESS, SELECT_CHAIN = range(2)
 
-# --- Fungsi RPC Helper (Baru) ---
+# --- Fungsi RPC Helper ---
 def make_rpc_request(rpc_url, method, params):
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     try:
@@ -44,7 +44,6 @@ def get_main_menu_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# (Fungsi get_network_keyboard tetap sama)
 def get_network_keyboard():
     keyboard = []
     row = []
@@ -73,7 +72,7 @@ async def start(update: Update, context):
     
     return ConversationHandler.END
 
-# --- Alur Tampilkan & Hapus Wallet (Tetap sama) ---
+# --- Alur Tampilkan & Hapus Wallet ---
 async def my_wallets(update: Update, context):
     query = update.callback_query
     await query.answer()
@@ -115,7 +114,7 @@ async def remove_wallet_confirm(update: Update, context):
         await query.edit_message_text("❌ Gagal menghapus wallet.")
     await start(update, context)
 
-# --- Alur Tambah Wallet (Tetap sama) ---
+# --- Alur Tambah Wallet ---
 async def add_wallet_start(update: Update, context):
     query = update.callback_query
     await query.answer()
@@ -145,9 +144,8 @@ async def select_chain(update: Update, context):
     await start(update, context)
     return ConversationHandler.END
 
-# --- Alur Portfolio (BARU) ---
+# --- Alur Portfolio (YANG DIPERBARUI) ---
 async def portfolio_start(update: Update, context):
-    """Langkah 1 Portfolio: Menampilkan daftar wallet untuk dipilih."""
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
@@ -159,23 +157,22 @@ async def portfolio_start(update: Update, context):
     keyboard = []
     for wallet_id, address, chain in wallets:
         button_text = f"{chain.title()}: {address[:6]}...{address[-4:]}"
-        # Callback data berisi 'portfolio_{chain}_{address}'
         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"portfolio_{chain}_{address}")])
     
     keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')])
     await query.edit_message_text("Pilih wallet yang ingin Anda lihat portfolionya:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def get_portfolio(update: Update, context):
-    """Langkah 2 Portfolio: Mengambil data dan menampilkannya."""
     query = update.callback_query
     await query.answer()
     
-    # Tampilkan pesan loading
     await query.edit_message_text("⏳ Sedang mengambil data portfolio, mohon tunggu...")
 
     _, chain, address = query.data.split('_')
     
-    rpc_url = f"https://{CHAIN_CONFIG[chain]['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
+    chain_data = CHAIN_CONFIG.get(chain, {})
+    explorer_url = chain_data.get('explorer_url')
+    rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     
     # Ambil saldo token ERC-20
     params = [address, "erc20"]
@@ -183,21 +180,28 @@ async def get_portfolio(update: Update, context):
     
     text = f"<b>📊 Portfolio untuk <code>{address}</code> di jaringan {chain.title()}</b>\n\n"
     
+    found_tokens = False
     if response and 'result' in response and response['result'].get('tokenBalances'):
         token_balances = response['result']['tokenBalances']
         for token in token_balances:
             balance_hex = token.get('tokenBalance', '0x0')
             if balance_hex and int(balance_hex, 16) > 0:
+                found_tokens = True
                 # Ambil metadata token
                 metadata_response = make_rpc_request(rpc_url, "alchemy_getTokenMetadata", [token['contractAddress']])
                 if metadata_response and 'result' in metadata_response:
                     metadata = metadata_response['result']
                     symbol = metadata.get('symbol', 'UNKNOWN')
+                    name = metadata.get('name', 'Unknown Token')
                     decimals = metadata.get('decimals', 18)
                     balance = int(balance_hex, 16) / (10 ** decimals)
+                    
                     if balance > 0.000001: # Filter debu
-                        text += f"<b>- {balance:,.6f} {symbol}</b>\n"
-    else:
+                        token_url = f"{explorer_url}/token/{token['contractAddress']}" if explorer_url else "#"
+                        text += f"🔹 <a href='{token_url}'><b>{symbol}</b></a>: {balance:,.6f}\n"
+                        text += f"   └ <code>{token['contractAddress']}</code>\n\n"
+
+    if not found_tokens:
         text += "Tidak ada token ERC-20 yang ditemukan.\n"
         
     keyboard = [[InlineKeyboardButton("⬅️ Kembali ke Menu", callback_data='main_menu')]]
@@ -224,13 +228,12 @@ def main():
     application.add_handler(CallbackQueryHandler(remove_wallet_menu, pattern='^remove_wallet_menu$'))
     application.add_handler(CallbackQueryHandler(remove_wallet_confirm, pattern='^delete_'))
     
-    # Handler untuk fitur portfolio (BARU)
     application.add_handler(CallbackQueryHandler(portfolio_start, pattern='^portfolio_start$'))
     application.add_handler(CallbackQueryHandler(get_portfolio, pattern='^portfolio_'))
     
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
     
-    print("Bot berjalan dengan fitur portfolio...")
+    print("Bot berjalan dengan fitur portfolio detail...")
     application.run_polling()
 
 if __name__ == '__main__':
