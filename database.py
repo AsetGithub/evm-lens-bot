@@ -1,99 +1,107 @@
+# database.py (Versi dengan Alias & Settings)
+
 import sqlite3
 
 DATABASE_NAME = 'wallets.db'
 
 def setup_database():
-    """Membuat tabel jika belum ada."""
+    """Mempersiapkan semua tabel yang dibutuhkan."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
+    # Tambahkan kolom 'alias' ke tabel wallets
+    try:
+        cursor.execute("ALTER TABLE wallets ADD COLUMN alias TEXT")
+    except sqlite3.OperationalError:
+        pass # Kolom sudah ada
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS wallets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             wallet_address TEXT NOT NULL,
             chain TEXT NOT NULL,
+            alias TEXT,
             UNIQUE(user_id, wallet_address, chain)
+        )
+    ''')
+    
+    # Buat tabel baru untuk pengaturan pengguna
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            min_value_usd REAL DEFAULT 0,
+            notify_on_airdrop INTEGER DEFAULT 1 -- 1 for True, 0 for False
         )
     ''')
     conn.commit()
     conn.close()
-    print("Database siap digunakan.")
+    print("Database siap digunakan dengan skema terbaru.")
 
-def add_wallet(user_id, wallet_address, chain):
-    """Menambahkan wallet baru ke database."""
+def add_wallet(user_id, wallet_address, chain, alias):
+    """Menambahkan wallet baru dengan alias."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT INTO wallets (user_id, wallet_address, chain) VALUES (?, ?, ?)",
-            (user_id, wallet_address.lower(), chain.lower())
+            "INSERT INTO wallets (user_id, wallet_address, chain, alias) VALUES (?, ?, ?, ?)",
+            (user_id, wallet_address.lower(), chain.lower(), alias)
         )
         conn.commit()
         conn.close()
         return True
     except sqlite3.IntegrityError:
-        # Terjadi jika wallet sudah ada (karena aturan UNIQUE)
         conn.close()
         return False
-        
-        # (kode yang sudah ada di atas biarkan saja)
-
-def get_all_wallets_by_chain(chain):
-    """Mengambil semua alamat wallet unik untuk jaringan tertentu."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT wallet_address FROM wallets WHERE chain = ?", (chain.lower(),))
-    wallets = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return wallets
-
-def get_users_for_wallet(wallet_address, chain):
-    """Mendapatkan semua user_id yang memantau wallet tertentu."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT user_id FROM wallets WHERE wallet_address = ? AND chain = ?",
-        (wallet_address.lower(), chain.lower())
-    )
-    user_ids = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return user_ids
-    
-    
-    # (kode yang sudah ada di atas biarkan saja)
-
-def get_active_chains():
-    """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT chain FROM wallets")
-    chains = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return chains
-
-
-
-
-# (kode yang sudah ada di atas biarkan saja)
 
 def get_wallets_by_user(user_id):
-    """Mengambil semua wallet yang dipantau oleh seorang pengguna."""
+    """Mengambil semua wallet, sekarang termasuk alias."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Kita ambil id, alamat, dan chain untuk ditampilkan dan dihapus
-    cursor.execute("SELECT id, wallet_address, chain FROM wallets WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT id, wallet_address, chain, alias FROM wallets WHERE user_id = ?", (user_id,))
     wallets = cursor.fetchall()
     conn.close()
     return wallets
 
 def remove_wallet_by_id(wallet_id, user_id):
-    """Menghapus wallet berdasarkan ID uniknya dan memastikan user_id cocok."""
+    """Menghapus wallet berdasarkan ID uniknya."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Menambahkan user_id di klausa WHERE untuk keamanan, agar pengguna tidak bisa menghapus wallet orang lain
     cursor.execute("DELETE FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
-    # rowcount akan bernilai 1 jika berhasil, 0 jika gagal (ID tidak ditemukan atau bukan milik user)
     success = cursor.rowcount > 0
     conn.commit()
     conn.close()
     return success
+
+# --- Fungsi Baru untuk Pengaturan ---
+
+def get_user_settings(user_id):
+    """Mengambil pengaturan untuk seorang pengguna."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT min_value_usd, notify_on_airdrop FROM user_settings WHERE user_id = ?", (user_id,))
+    settings = cursor.fetchone()
+    if settings:
+        return {'min_value_usd': settings[0], 'notify_on_airdrop': bool(settings[1])}
+    else:
+        # Jika pengguna belum punya pengaturan, buat default
+        cursor.execute("INSERT INTO user_settings (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        conn.close()
+        return {'min_value_usd': 0, 'notify_on_airdrop': True}
+
+def update_user_setting(user_id, key, value):
+    """Memperbarui satu pengaturan spesifik untuk pengguna."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    # Pastikan key aman untuk dimasukkan ke query
+    if key not in ['min_value_usd', 'notify_on_airdrop']:
+        return False
+    
+    # Konversi boolean ke integer untuk SQLite
+    if isinstance(value, bool):
+        value = 1 if value else 0
+        
+    cursor.execute(f"UPDATE user_settings SET {key} = ? WHERE user_id = ?", (value, user_id))
+    conn.commit()
+    conn.close()
+    return True
