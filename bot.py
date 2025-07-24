@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan Perbaikan Tampilan Alias)
+# bot.py (Versi Final dengan Perbaikan Galeri NFT)
 
 import logging
 import requests
@@ -100,9 +100,7 @@ async def my_wallets(update: Update, context):
     wallets = database.get_wallets_by_user(update.effective_user.id)
     text = "📂 **Wallet Anda:**\n\n" if wallets else "Anda belum menambahkan wallet."
     for _, address, chain, alias in wallets:
-        # --- PERBAIKAN DI SINI ---
         display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
-        # --- AKHIR PERBAIKAN ---
         text += f"🔹 **{display_name}** ({chain.title()})\n   └ <code>{address}</code>\n"
     keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
@@ -194,6 +192,8 @@ async def get_portfolio_nft(update: Update, context):
     if not network_subdomain:
         await query.edit_message_text("Jaringan tidak didukung untuk NFT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
+        
+    # Di Alchemy V3, nama endpointnya getNFTsForOwner
     api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}"
     try:
         response = requests.get(api_url); response.raise_for_status(); data = response.json()
@@ -201,23 +201,39 @@ async def get_portfolio_nft(update: Update, context):
         logging.error(f"Gagal mengambil data NFT: {e}")
         await query.edit_message_text("Gagal mengambil data NFT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
+        
     text = f"<b>🖼️ Portfolio NFT untuk <code>{address}</code> ({chain.title()})</b>\n\n"
     if data and data.get('ownedNfts'):
         collections = {}
         for nft in data['ownedNfts']:
-            collection_name = nft.get('collection', {}).get('name', 'Koleksi Tidak Dikenal')
+            # --- PERBAIKAN DI SINI ---
+            # Kita cek dulu apakah 'collection' ada dan bukan None
+            collection_info = nft.get('collection')
+            if collection_info:
+                collection_name = collection_info.get('name', 'Koleksi Tidak Dikenal')
+            else:
+                collection_name = 'Koleksi Tidak Dikenal'
+            # --- AKHIR PERBAIKAN ---
+
             if collection_name not in collections: collections[collection_name] = []
             collections[collection_name].append(nft)
+        
         for name, nfts in collections.items():
-            text += f"<b> collezione {name}</b> ({len(nfts)} NFT)\n"
+            text += f"<b> koleksi {name}</b> ({len(nfts)} NFT)\n"
             for nft in nfts[:3]:
-                nft_name = nft.get('name', f"#{nft.get('tokenId')}")
-                nft_url = f"{explorer_url}/nft/{nft['contract']['address']}/{nft['tokenId']}" if explorer_url else "#"
-                text += f"  - <a href='{nft_url}'>{nft_name}</a>\n"
+                nft_name = nft.get('name') or f"#{nft.get('tokenId')}"
+                contract_address = nft.get('contract', {}).get('address')
+                token_id = nft.get('tokenId')
+                if explorer_url and contract_address and token_id:
+                    nft_url = f"{explorer_url}/nft/{contract_address}/{token_id}"
+                    text += f"  - <a href='{nft_url}'>{nft_name}</a>\n"
+                else:
+                    text += f"  - {nft_name}\n"
             if len(nfts) > 3: text += "  - ...dan lainnya\n"
             text += "\n"
     else:
         text += "Tidak ada NFT yang ditemukan.\n"
+        
     keyboard = [[InlineKeyboardButton("⬅️ Kembali ke Menu", callback_data='main_menu')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML', disable_web_page_preview=True)
 
@@ -288,7 +304,7 @@ def main():
     application.add_handler(CallbackQueryHandler(settings_menu, pattern='^settings_menu$'))
     application.add_handler(CallbackQueryHandler(toggle_airdrop, pattern='^toggle_airdrop$'))
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
-    print("Bot berjalan dengan fitur Alias & Settings...")
+    print("Bot berjalan dengan perbaikan galeri NFT...")
     application.run_polling()
 
 if __name__ == '__main__':
