@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan Galeri NFT)
+# bot.py (Versi Final dengan Perbaikan Unpack)
 
 import logging
 import requests
@@ -17,10 +17,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Definisikan state untuk alur percakapan
 GET_ADDRESS, SELECT_CHAIN = range(2)
 
-# --- Fungsi RPC Helper ---
 def make_rpc_request(rpc_url, method, params):
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     try:
@@ -30,8 +28,6 @@ def make_rpc_request(rpc_url, method, params):
     except Exception as e:
         logging.error(f"Error saat melakukan request ke RPC: {e}")
     return None
-
-# --- Fungsi Menu & Tombol ---
 
 def get_main_menu_keyboard():
     keyboard = [
@@ -54,22 +50,17 @@ def get_network_keyboard():
     keyboard.append([InlineKeyboardButton("❌ Batalkan", callback_data='cancel')])
     return InlineKeyboardMarkup(keyboard)
 
-# --- Fungsi Handler Utama ---
-
 async def start(update: Update, context):
     user = update.effective_user
     text = f"Halo {user.mention_html()}!\n\nSaya EVM Lens Bot, siap membantumu. Pilih menu di bawah."
-    
     if update.callback_query:
         query = update.callback_query
         await query.answer()
         await query.edit_message_text(text=text, reply_markup=get_main_menu_keyboard(), parse_mode='HTML')
     else:
         await update.message.reply_html(text, reply_markup=get_main_menu_keyboard())
-    
     return ConversationHandler.END
 
-# --- Alur Tampilkan & Hapus Wallet (Sama) ---
 async def my_wallets(update: Update, context):
     query = update.callback_query; await query.answer()
     wallets = database.get_wallets_by_user(update.effective_user.id)
@@ -95,7 +86,6 @@ async def remove_wallet_confirm(update: Update, context):
     await query.edit_message_text("✅ Wallet berhasil dihapus." if success else "❌ Gagal menghapus wallet.")
     await start(update, context)
 
-# --- Alur Tambah Wallet (Sama) ---
 async def add_wallet_start(update: Update, context):
     query = update.callback_query; await query.answer()
     await query.edit_message_text(text="Oke, kirim alamat wallet (contoh: 0x...) yang ingin Anda pantau.")
@@ -121,9 +111,7 @@ async def select_chain(update: Update, context):
     await start(update, context)
     return ConversationHandler.END
 
-# --- Alur Portfolio (YANG DIPERBARUI) ---
 async def portfolio_start(update: Update, context):
-    """Langkah 1 Portfolio: Menampilkan daftar wallet untuk dipilih."""
     query = update.callback_query; await query.answer()
     wallets = database.get_wallets_by_user(update.effective_user.id)
     if not wallets:
@@ -134,9 +122,18 @@ async def portfolio_start(update: Update, context):
     await query.edit_message_text("Pilih wallet yang ingin Anda lihat portfolionya:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def portfolio_select_asset_type(update: Update, context):
-    """Langkah 2 Portfolio: Meminta pengguna memilih jenis aset."""
     query = update.callback_query; await query.answer()
-    _, chain, address = query.data.split('_')
+    
+    # --- PERBAIKAN UTAMA DI SINI ---
+    # Kita pecah datanya menjadi 4 bagian, bukan 3.
+    try:
+        _, _, chain, address = query.data.split('_', 3)
+    except ValueError:
+        logging.error(f"Gagal unpack callback_data: {query.data}")
+        await query.edit_message_text("Terjadi error. Silakan coba lagi dari /start.")
+        return
+    # --- AKHIR PERBAIKAN ---
+
     text = f"Pilih jenis aset untuk wallet <code>{address[:10]}...</code> di jaringan {chain.title()}:"
     keyboard = [
         [
@@ -148,10 +145,9 @@ async def portfolio_select_asset_type(update: Update, context):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 async def get_portfolio_erc20(update: Update, context):
-    """Menampilkan portfolio Token ERC-20."""
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⏳ Sedang mengambil data token, mohon tunggu...")
-    _, chain, address = query.data.split('_')
+    _, _, chain, address = query.data.split('_', 3)
     
     chain_data = CHAIN_CONFIG.get(chain, {})
     explorer_url = chain_data.get('explorer_url')
@@ -182,10 +178,9 @@ async def get_portfolio_erc20(update: Update, context):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
 async def get_portfolio_nft(update: Update, context):
-    """Menampilkan portfolio NFT."""
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⏳ Sedang mengambil data NFT, mohon tunggu...")
-    _, chain, address = query.data.split('_')
+    _, _, chain, address = query.data.split('_', 3)
     
     network_subdomain = CHAIN_CONFIG.get(chain, {}).get('rpc_subdomain')
     explorer_url = CHAIN_CONFIG.get(chain, {}).get('explorer_url')
@@ -193,7 +188,6 @@ async def get_portfolio_nft(update: Update, context):
         await query.edit_message_text("Jaringan tidak didukung untuk NFT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
 
-    # API call ke Alchemy NFT API
     api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}"
     try:
         response = requests.get(api_url)
@@ -215,7 +209,7 @@ async def get_portfolio_nft(update: Update, context):
         
         for name, nfts in collections.items():
             text += f"<b> collezione {name}</b> ({len(nfts)} NFT)\n"
-            for nft in nfts[:3]: # Tampilkan maks 3 NFT per koleksi
+            for nft in nfts[:3]:
                 nft_name = nft.get('name', f"#{nft.get('tokenId')}")
                 nft_url = f"{explorer_url}/nft/{nft['contract']['address']}/{nft['tokenId']}" if explorer_url else "#"
                 text += f"  - <a href='{nft_url}'>{nft_name}</a>\n"
@@ -227,7 +221,6 @@ async def get_portfolio_nft(update: Update, context):
     keyboard = [[InlineKeyboardButton("⬅️ Kembali ke Menu", callback_data='main_menu')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML', disable_web_page_preview=True)
 
-# --- Main ---
 def main():
     database.setup_database()
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
@@ -249,7 +242,7 @@ def main():
     application.add_handler(CallbackQueryHandler(get_portfolio_nft, pattern='^portfolio_nft_'))
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
     
-    print("Bot berjalan dengan fitur galeri NFT...")
+    print("Bot berjalan dengan perbaikan alur portfolio...")
     application.run_polling()
 
 if __name__ == '__main__':
