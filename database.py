@@ -1,4 +1,4 @@
-# database.py (Versi dengan Alias & Settings)
+# database.py (Versi dengan Alias & Settings + Missing Method)
 
 import sqlite3
 
@@ -91,6 +91,18 @@ def get_all_wallets_by_chain(chain_name):
     wallets = [row[0] for row in cursor.fetchall()]
     conn.close()
     return wallets
+
+def get_users_for_wallet(wallet_address, chain_name):
+    """ADDED: Missing method - Mengambil semua user_id yang memantau wallet tertentu."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT DISTINCT user_id FROM wallets WHERE wallet_address = ? AND chain = ?", 
+        (wallet_address.lower(), chain_name.lower())
+    )
+    user_ids = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return user_ids
 
 def get_user_settings(user_id):
     conn = sqlite3.connect(DATABASE_NAME)

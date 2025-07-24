@@ -1,6 +1,7 @@
 # bot/handlers/portfolio.py
 
 import logging
+import requests  # ADDED: Missing import
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 import database
 import config
