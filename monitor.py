@@ -1,9 +1,10 @@
-# monitor.py (Versi Final dengan alchemy_getAssetTransfers)
+# monitor.py (Versi Final dengan perbaikan alchemy_getAssetTransfers)
 
 import time
 import logging
 import requests
 import threading
+import asyncio
 from telegram import Bot
 
 import config
@@ -14,6 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
 CHAIN_CONFIG = {
+    # == Top Tier & L2s Utama ==
     'ethereum': {'explorer_url': 'https://etherscan.io', 'rpc_subdomain': 'eth-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'arbitrum': {'explorer_url': 'https://arbiscan.io', 'rpc_subdomain': 'arb-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'optimism': {'explorer_url': 'https://optimistic.etherscan.io', 'rpc_subdomain': 'opt-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
@@ -23,6 +25,8 @@ CHAIN_CONFIG = {
     'scroll': {'explorer_url': 'https://scrollscan.com', 'rpc_subdomain': 'scroll-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'blast': {'explorer_url': 'https://blastscan.io', 'rpc_subdomain': 'blast-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
     'zora': {'explorer_url': 'https://explorer.zora.energy', 'rpc_subdomain': 'zora-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    
+    # L1 & Sidechains dengan token native sendiri
     'polygon': {'explorer_url': 'https://polygonscan.com', 'rpc_subdomain': 'polygon-mainnet', 'coingecko_id': 'matic-network', 'symbol': 'MATIC'},
     'bsc': {'explorer_url': 'https://bscscan.com', 'rpc_subdomain': 'bsc-mainnet', 'coingecko_id': 'binancecoin', 'symbol': 'BNB'},
     'avalanche': {'explorer_url': 'https://snowtrace.io', 'rpc_subdomain': 'avax-mainnet', 'coingecko_id': 'avalanche-2', 'symbol': 'AVAX'},
@@ -58,26 +62,32 @@ def get_price(coingecko_id):
         logging.error(f"Gagal mengambil harga untuk {coingecko_id}: {e}")
     return None
 
+async def send_photo_async(user_id, image_buffer, caption):
+    """Fungsi async wrapper untuk send_photo agar tidak ada warning."""
+    try:
+        await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
+        logging.info(f"Kuitansi gambar BERHASIL dikirim ke user {user_id}")
+        image_buffer.seek(0)
+    except Exception as e:
+        logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
+
 def process_and_send(tx, chain_name, chain_data, triggered_address):
     """Memproses data transaksi yang sudah pasti relevan dan mengirim notifikasi."""
     is_outgoing = triggered_address.lower() == tx['from'].lower()
     
-    # Menentukan jumlah dan simbol
     symbol = tx.get('asset')
     value = tx.get('value')
-    if symbol is None: # Jika ini transfer ETH/MATIC/BNB
+    if symbol is None:
         symbol = chain_data.get('symbol', 'Token')
         value = int(tx.get('rawContract', {}).get('value', '0x0'), 16) / 1e18
 
-    # Menentukan coingecko_id untuk harga
     coingecko_id = None
     if symbol == chain_data.get('symbol'):
         coingecko_id = chain_data.get('coingecko_id')
-    # Di masa depan, kita bisa menambahkan logika untuk mencari coingecko_id dari token lain
 
-    price_usd = get_price(coingecko_id) if coingecko_id and value else None
-    value_usd_text = f" (~${(value * price_usd):,.2f} USD)" if price_usd else ""
-    amount_text = f"{value:.6f} {symbol}{value_usd_text}" if value is not None else "Token / NFT Transfer"
+    price_usd = get_price(coingecko_id) if coingecko_id and value is not None else None
+    value_usd_text = f" (~${(value * price_usd):,.2f} USD)" if price_usd and value is not None else ""
+    amount_text = f"{value:.6f} {symbol}{value_usd_text}" if value is not None else "NFT Transfer"
 
     tx_data = {
         'chain': chain_name, 'direction': "➡️ KELUAR" if is_outgoing else "✅ MASUK",
@@ -93,12 +103,7 @@ def process_and_send(tx, chain_name, chain_data, triggered_address):
         caption = f"Transaksi terdeteksi di jaringan {chain_name.title()} untuk wallet <code>{triggered_address}</code>"
         users_to_notify = database.get_users_for_wallet(triggered_address, chain_name)
         for user_id in users_to_notify:
-            try:
-                bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
-                logging.info(f"Kuitansi gambar dikirim ke user {user_id}")
-                image_buffer.seek(0)
-            except Exception as e:
-                logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
+            asyncio.run(send_photo_async(user_id, image_buffer, caption))
 
 def monitor_chain(chain_name, chain_data):
     """Fungsi utama untuk memantau satu jaringan dengan metode polling `getAssetTransfers`."""
@@ -121,33 +126,32 @@ def monitor_chain(chain_name, chain_data):
             latest_block = int(latest_block_hex, 16)
 
             if last_processed_block == -1:
-                last_processed_block = latest_block - 1
+                last_processed_block = latest_block
 
             if latest_block > last_processed_block:
                 logging.info(f"[{chain_name}] Memeriksa blok dari {hex(last_processed_block + 1)} hingga {hex(latest_block)}")
                 
-                # Menggunakan alchemy_getAssetTransfers
                 params = [{
                     "fromBlock": hex(last_processed_block + 1),
                     "toBlock": hex(latest_block),
-                    "fromAddress": wallets_to_monitor,
+                    "address": wallets_to_monitor,
                     "category": ["external", "internal", "erc20", "erc721", "erc1155"],
                     "withMetadata": True,
                     "excludeZeroValue": False,
                 }]
+                
                 response = make_rpc_request(rpc_url, "alchemy_getAssetTransfers", params)
                 
                 if response and 'result' in response and response['result'].get('transfers'):
                     for tx in response['result']['transfers']:
-                        process_and_send(tx, chain_name, chain_data, tx['from'])
-
-                params[0]["fromAddress"] = None
-                params[0]["toAddress"] = wallets_to_monitor
-                response = make_rpc_request(rpc_url, "alchemy_getAssetTransfers", params)
-
-                if response and 'result' in response and response['result'].get('transfers'):
-                    for tx in response['result']['transfers']:
-                        process_and_send(tx, chain_name, chain_data, tx['to'])
+                        triggered_address = ""
+                        if tx['from'].lower() in wallets_to_monitor:
+                            triggered_address = tx['from']
+                        elif tx['to'].lower() in wallets_to_monitor:
+                            triggered_address = tx['to']
+                        
+                        if triggered_address:
+                            process_and_send(tx, chain_name, chain_data, triggered_address)
 
                 last_processed_block = latest_block
 
@@ -159,7 +163,7 @@ def monitor_chain(chain_name, chain_data):
 
 def main():
     """Fungsi utama yang menjalankan semua monitor dalam thread terpisah."""
-    logging.info("Memulai Mesin Pemantau (Versi AssetTransfers)...")
+    logging.info("Memulai Mesin Pemantau (Versi Final)...")
     database.setup_database()
     
     threads = []
