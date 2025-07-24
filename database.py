@@ -1,4 +1,4 @@
-# database.py (Versi dengan Alias & Settings)
+# database.py (Versi Final dengan fungsi yang hilang)
 
 import sqlite3
 
@@ -78,30 +78,42 @@ def get_user_settings(user_id):
     """Mengambil pengaturan untuk seorang pengguna."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
+    # Pastikan tabel ada sebelum mencoba mengambil data
+    cursor.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user_id,))
+    conn.commit()
+    
     cursor.execute("SELECT min_value_usd, notify_on_airdrop FROM user_settings WHERE user_id = ?", (user_id,))
     settings = cursor.fetchone()
+    conn.close()
+
+    # Fallback ke default jika karena alasan tertentu settings masih None
     if settings:
         return {'min_value_usd': settings[0], 'notify_on_airdrop': bool(settings[1])}
     else:
-        # Jika pengguna belum punya pengaturan, buat default
-        cursor.execute("INSERT INTO user_settings (user_id) VALUES (?)", (user_id,))
-        conn.commit()
-        conn.close()
         return {'min_value_usd': 0, 'notify_on_airdrop': True}
+
 
 def update_user_setting(user_id, key, value):
     """Memperbarui satu pengaturan spesifik untuk pengguna."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Pastikan key aman untuk dimasukkan ke query
     if key not in ['min_value_usd', 'notify_on_airdrop']:
         return False
     
-    # Konversi boolean ke integer untuk SQLite
     if isinstance(value, bool):
         value = 1 if value else 0
         
-    cursor.execute(f"UPDATE user_settings SET {key} = ? WHERE user_id = ?", (value, user_id))
+    cursor.execute("UPDATE user_settings SET {key} = ? WHERE user_id = ?".format(key=key), (value, user_id))
     conn.commit()
     conn.close()
     return True
+
+# --- FUNGSI YANG HILANG DAN DITAMBAHKAN KEMBALI ---
+def get_active_chains():
+    """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT chain FROM wallets")
+    chains = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return chains
