@@ -3,7 +3,7 @@
 import requests
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from monitor import CHAIN_CONFIG
+from constants import CHAIN_CONFIG # <-- PERUBAHAN DI SINI
 
 def make_rpc_request(rpc_url, method, params):
     """Fungsi pembantu untuk membuat permintaan JSON-RPC."""
@@ -20,7 +20,7 @@ def get_price(coingecko_id):
     """Mengambil harga dari CoinGecko API."""
     if not coingecko_id: return None
     try:
-        url = f"[https://api.coingecko.com/api/v3/simple/price?ids=](https://api.coingecko.com/api/v3/simple/price?ids=){coingecko_id}&vs_currencies=usd"
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
