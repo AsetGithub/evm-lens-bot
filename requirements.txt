@@ -1,5 +1,4 @@
 python-telegram-bot==21.2
-websockets
 requests
 Pillow
 qrcode
