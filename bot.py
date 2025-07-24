@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan Perbaikan Galeri NFT)
+# bot.py (Versi Final dengan Perbaikan Callback Data)
 
 import logging
 import requests
@@ -17,7 +17,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Definisikan state untuk alur percakapan
 GET_ADDRESS, SELECT_CHAIN, GET_ALIAS = range(3)
 SET_MIN_VALUE = range(3, 4)
 
@@ -131,26 +130,27 @@ async def portfolio_start(update: Update, context):
     if not wallets:
         await query.edit_message_text("Anda belum memiliki wallet untuk dilihat.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
         return
-    keyboard = []
-    for _, address, chain, alias in wallets:
-        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
-        keyboard.append([InlineKeyboardButton(f"{display_name} ({chain.title()})", callback_data=f"portfolio_select_{chain}_{address}")])
+    keyboard = [[InlineKeyboardButton(f"{(alias or (a[:6]+'...'+a[-4:]))} ({c.title()})", callback_data=f"portfolio_select_{wid}")] for wid, a, c, alias in wallets]
     keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')])
     await query.edit_message_text("Pilih wallet yang ingin Anda lihat portfolionya:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def portfolio_select_asset_type(update: Update, context):
     query = update.callback_query; await query.answer()
     try:
-        _, _, chain, address = query.data.split('_', 3)
-    except ValueError:
-        logging.error(f"Gagal unpack callback_data: {query.data}")
-        await query.edit_message_text("Terjadi error. Silakan coba lagi dari /start.")
+        wallet_id = int(query.data.split('_')[2])
+        wallet_data = database.get_wallet_by_id(wallet_id, update.effective_user.id)
+        if not wallet_data:
+            await query.edit_message_text("Wallet tidak ditemukan.")
+            return
+        address, chain = wallet_data
+    except (ValueError, IndexError):
+        await query.edit_message_text("Data tombol tidak valid.")
         return
     text = f"Pilih jenis aset untuk wallet <code>{address[:10]}...</code> di jaringan {chain.title()}:"
     keyboard = [
         [
-            InlineKeyboardButton("💰 Token (ERC-20)", callback_data=f"portfolio_erc20_{chain}_{address}"),
-            InlineKeyboardButton("🖼️ Koleksi NFT", callback_data=f"portfolio_nft_{chain}_{address}")
+            InlineKeyboardButton("💰 Token (ERC-20)", callback_data=f"portfolio_erc20_{wallet_id}"),
+            InlineKeyboardButton("🖼️ Koleksi NFT", callback_data=f"portfolio_nft_{wallet_id}")
         ],
         [InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]
     ]
@@ -159,7 +159,12 @@ async def portfolio_select_asset_type(update: Update, context):
 async def get_portfolio_erc20(update: Update, context):
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⏳ Sedang mengambil data token...")
-    _, _, chain, address = query.data.split('_', 3)
+    wallet_id = int(query.data.split('_')[2])
+    wallet_data = database.get_wallet_by_id(wallet_id, update.effective_user.id)
+    if not wallet_data:
+        await query.edit_message_text("Wallet tidak ditemukan.")
+        return
+    address, chain = wallet_data
     chain_data = CHAIN_CONFIG.get(chain, {}); explorer_url = chain_data.get('explorer_url')
     rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     params = [address, "erc20"]
@@ -186,54 +191,47 @@ async def get_portfolio_erc20(update: Update, context):
 async def get_portfolio_nft(update: Update, context):
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⏳ Sedang mengambil data NFT...")
-    _, _, chain, address = query.data.split('_', 3)
+    wallet_id = int(query.data.split('_')[2])
+    wallet_data = database.get_wallet_by_id(wallet_id, update.effective_user.id)
+    if not wallet_data:
+        await query.edit_message_text("Wallet tidak ditemukan.")
+        return
+    address, chain = wallet_data
     network_subdomain = CHAIN_CONFIG.get(chain, {}).get('rpc_subdomain')
     explorer_url = CHAIN_CONFIG.get(chain, {}).get('explorer_url')
     if not network_subdomain:
-        await query.edit_message_text("Jaringan tidak didukung untuk NFT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
+        await query.edit_message_text("Jaringan tidak didukung untuk NFT.")
         return
-        
-    # Di Alchemy V3, nama endpointnya getNFTsForOwner
     api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}"
     try:
         response = requests.get(api_url); response.raise_for_status(); data = response.json()
     except Exception as e:
         logging.error(f"Gagal mengambil data NFT: {e}")
-        await query.edit_message_text("Gagal mengambil data NFT.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
+        await query.edit_message_text("Gagal mengambil data NFT.")
         return
-        
     text = f"<b>🖼️ Portfolio NFT untuk <code>{address}</code> ({chain.title()})</b>\n\n"
     if data and data.get('ownedNfts'):
         collections = {}
         for nft in data['ownedNfts']:
-            # --- PERBAIKAN DI SINI ---
-            # Kita cek dulu apakah 'collection' ada dan bukan None
             collection_info = nft.get('collection')
-            if collection_info:
-                collection_name = collection_info.get('name', 'Koleksi Tidak Dikenal')
-            else:
-                collection_name = 'Koleksi Tidak Dikenal'
-            # --- AKHIR PERBAIKAN ---
-
+            if collection_info: collection_name = collection_info.get('name', 'Koleksi Tidak Dikenal')
+            else: collection_name = 'Koleksi Tidak Dikenal'
             if collection_name not in collections: collections[collection_name] = []
             collections[collection_name].append(nft)
-        
         for name, nfts in collections.items():
             text += f"<b> koleksi {name}</b> ({len(nfts)} NFT)\n"
-            for nft in nfts[:3]:
+            for nft in nfts[:5]:
                 nft_name = nft.get('name') or f"#{nft.get('tokenId')}"
                 contract_address = nft.get('contract', {}).get('address')
                 token_id = nft.get('tokenId')
                 if explorer_url and contract_address and token_id:
                     nft_url = f"{explorer_url}/nft/{contract_address}/{token_id}"
                     text += f"  - <a href='{nft_url}'>{nft_name}</a>\n"
-                else:
-                    text += f"  - {nft_name}\n"
-            if len(nfts) > 10: text += "  - ...dan lainnya\n"
+                else: text += f"  - {nft_name}\n"
+            if len(nfts) > 5: text += "  - ...dan lainnya\n"
             text += "\n"
     else:
         text += "Tidak ada NFT yang ditemukan.\n"
-        
     keyboard = [[InlineKeyboardButton("⬅️ Kembali ke Menu", callback_data='main_menu')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML', disable_web_page_preview=True)
 
@@ -304,7 +302,8 @@ def main():
     application.add_handler(CallbackQueryHandler(settings_menu, pattern='^settings_menu$'))
     application.add_handler(CallbackQueryHandler(toggle_airdrop, pattern='^toggle_airdrop$'))
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
-    print("Bot berjalan dengan perbaikan galeri NFT...")
+    
+    print("Bot berjalan dengan fitur Alias & Settings...")
     application.run_polling()
 
 if __name__ == '__main__':
