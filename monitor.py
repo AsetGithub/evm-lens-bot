@@ -1,9 +1,4 @@
-threads:
-        thread.join()
-
-if __name__ == "__main__":
-    main()
-# monitor.py (Versi Final dengan semua perbaikan)
+# monitor.py (Versi Final dengan Jeda Blok)
 
 import time
 import logging
@@ -68,7 +63,6 @@ def get_price(coingecko_id):
     return None
 
 async def send_photo_async(user_id, image_buffer, caption):
-    """Fungsi async wrapper untuk send_photo agar tidak ada warning."""
     try:
         await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
         logging.info(f"Kuitansi gambar BERHASIL dikirim ke user {user_id}")
@@ -77,7 +71,6 @@ async def send_photo_async(user_id, image_buffer, caption):
         logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
 
 def process_and_send(tx, chain_name, chain_data, triggered_address):
-    """Memproses data transaksi yang sudah pasti relevan dan mengirim notifikasi."""
     is_outgoing = triggered_address.lower() == tx['from'].lower()
     
     symbol = tx.get('asset')
@@ -111,7 +104,6 @@ def process_and_send(tx, chain_name, chain_data, triggered_address):
             asyncio.run(send_photo_async(user_id, image_buffer, caption))
 
 def monitor_chain(chain_name, chain_data):
-    """Fungsi utama untuk memantau satu jaringan dengan metode polling `getAssetTransfers`."""
     rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     logging.info(f"[{chain_name}] Memulai pemantauan dengan metode `getAssetTransfers` ke {rpc_url}")
     last_processed_block = -1
@@ -133,12 +125,17 @@ def monitor_chain(chain_name, chain_data):
             if last_processed_block == -1:
                 last_processed_block = latest_block
 
-            if latest_block > last_processed_block:
-                logging.info(f"[{chain_name}] Memeriksa blok dari {hex(last_processed_block + 1)} hingga {hex(latest_block)}")
+            # --- PERUBAHAN UTAMA DI SINI ---
+            # Kita beri jeda 2 blok untuk memastikan data terindeks
+            to_block_to_check = latest_block - 2
+            
+            if to_block_to_check > last_processed_block:
+                from_block_to_check = last_processed_block + 1
+                logging.info(f"[{chain_name}] Memeriksa blok dari {hex(from_block_to_check)} hingga {hex(to_block_to_check)}")
                 
                 params = [{
-                    "fromBlock": hex(last_processed_block + 1),
-                    "toBlock": hex(latest_block),
+                    "fromBlock": hex(from_block_to_check),
+                    "toBlock": hex(to_block_to_check),
                     "address": wallets_to_monitor,
                     "category": ["external", "erc20", "erc721", "erc1155"],
                     "withMetadata": True,
@@ -158,17 +155,17 @@ def monitor_chain(chain_name, chain_data):
                         if triggered_address:
                             process_and_send(tx, chain_name, chain_data, triggered_address)
 
-                last_processed_block = latest_block
+                last_processed_block = to_block_to_check
+            # --- AKHIR PERUBAHAN ---
 
-            time.sleep(15)
+            time.sleep(20) # Kita perpanjang sedikit jeda polling
 
         except Exception as e:
             logging.error(f"[{chain_name}] Error pada loop monitor: {e}")
             time.sleep(30)
 
 def main():
-    """Fungsi utama yang menjalankan semua monitor dalam thread terpisah."""
-    logging.info("Memulai Mesin Pemantau (Versi Final)...")
+    logging.info("Memulai Mesin Pemantau (Versi Jeda Blok)...")
     database.setup_database()
     
     threads = []
