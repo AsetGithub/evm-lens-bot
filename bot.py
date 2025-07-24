@@ -229,7 +229,7 @@ async def get_portfolio_nft(update: Update, context):
                     text += f"  - <a href='{nft_url}'>{nft_name}</a>\n"
                 else:
                     text += f"  - {nft_name}\n"
-            if len(nfts) > 3: text += "  - ...dan lainnya\n"
+            if len(nfts) > 10: text += "  - ...dan lainnya\n"
             text += "\n"
     else:
         text += "Tidak ada NFT yang ditemukan.\n"
