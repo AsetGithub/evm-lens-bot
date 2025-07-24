@@ -1,4 +1,4 @@
-# monitor.py (Versi Final dengan Perbaikan Indentasi)
+# monitor.py (Versi Final dengan Pengecekan Settings)
 
 import time
 import logging
@@ -10,59 +10,37 @@ from telegram import Bot
 import config
 import database
 from image_generator import create_transaction_image
+from bot.utils import get_price, make_rpc_request
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
-# Kamus konfigurasi final dengan semua jaringan yang didukung + data harga
 CHAIN_CONFIG = {
-    'ethereum': {'explorer_url': 'https://etherscan.io', 'rpc_subdomain': 'eth-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'arbitrum': {'explorer_url': 'https://arbiscan.io', 'rpc_subdomain': 'arb-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'optimism': {'explorer_url': 'https://optimistic.etherscan.io', 'rpc_subdomain': 'opt-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'base': {'explorer_url': 'https://basescan.org', 'rpc_subdomain': 'base-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'zksync': {'explorer_url': 'https://explorer.zksync.io', 'rpc_subdomain': 'zksync-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'linea': {'explorer_url': 'https://lineascan.build', 'rpc_subdomain': 'linea-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'scroll': {'explorer_url': 'https://scrollscan.com', 'rpc_subdomain': 'scroll-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'blast': {'explorer_url': 'https://blastscan.io', 'rpc_subdomain': 'blast-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'zora': {'explorer_url': 'https://explorer.zora.energy', 'rpc_subdomain': 'zora-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
-    'polygon': {'explorer_url': 'https://polygonscan.com', 'rpc_subdomain': 'polygon-mainnet', 'coingecko_id': 'matic-network', 'symbol': 'MATIC'},
-    'bsc': {'explorer_url': 'https://bscscan.com', 'rpc_subdomain': 'bsc-mainnet', 'coingecko_id': 'binancecoin', 'symbol': 'BNB'},
-    'avalanche': {'explorer_url': 'https://snowtrace.io', 'rpc_subdomain': 'avax-mainnet', 'coingecko_id': 'avalanche-2', 'symbol': 'AVAX'},
-    'fantom': {'explorer_url': 'https://ftmscan.com', 'rpc_subdomain': 'fantom-mainnet', 'coingecko_id': 'fantom', 'symbol': 'FTM'},
-    'mantle': {'explorer_url': 'https://mantlescan.xyz', 'rpc_subdomain': 'mantle-mainnet', 'coingecko_id': 'mantle', 'symbol': 'MNT'},
-    'cronos': {'explorer_url': 'https://cronoscan.com', 'rpc_subdomain': 'cronos-mainnet', 'coingecko_id': 'crypto-com-chain', 'symbol': 'CRO'},
-    'gnosis': {'explorer_url': 'https://gnosisscan.io', 'rpc_subdomain': 'gnosis-mainnet', 'coingecko_id': 'xdai', 'symbol': 'xDAI'},
-    'celo': {'explorer_url': 'https://celoscan.io', 'rpc_subdomain': 'celo-mainnet', 'coingecko_id': 'celo', 'symbol': 'CELO'},
-    'astar': {'explorer_url': 'https://astar.subscan.io', 'rpc_subdomain': 'astar-mainnet', 'coingecko_id': 'astar', 'symbol': 'ASTR'},
-    'metis': {'explorer_url': 'https://andromeda-explorer.metis.io', 'rpc_subdomain': 'metis-mainnet', 'coingecko_id': 'metis-token', 'symbol': 'METIS'},
-    'degen': {'explorer_url': 'https://explorer.degen.tips', 'rpc_subdomain': 'degen-mainnet', 'coingecko_id': 'degen-base', 'symbol': 'DEGEN'},
-    'opbnb': {'explorer_url': 'https://opbnb.bscscan.com', 'rpc_subdomain': 'opbnb-mainnet', 'coingecko_id': 'binancecoin', 'symbol': 'BNB'},
+    'ethereum': {'explorer_url': '[https://etherscan.io](https://etherscan.io)', 'rpc_subdomain': 'eth-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'arbitrum': {'explorer_url': '[https://arbiscan.io](https://arbiscan.io)', 'rpc_subdomain': 'arb-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'optimism': {'explorer_url': '[https://optimistic.etherscan.io](https://optimistic.etherscan.io)', 'rpc_subdomain': 'opt-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'base': {'explorer_url': '[https://basescan.org](https://basescan.org)', 'rpc_subdomain': 'base-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'zksync': {'explorer_url': '[https://explorer.zksync.io](https://explorer.zksync.io)', 'rpc_subdomain': 'zksync-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'linea': {'explorer_url': '[https://lineascan.build](https://lineascan.build)', 'rpc_subdomain': 'linea-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'scroll': {'explorer_url': '[https://scrollscan.com](https://scrollscan.com)', 'rpc_subdomain': 'scroll-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'blast': {'explorer_url': '[https://blastscan.io](https://blastscan.io)', 'rpc_subdomain': 'blast-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'zora': {'explorer_url': '[https://explorer.zora.energy](https://explorer.zora.energy)', 'rpc_subdomain': 'zora-mainnet', 'coingecko_id': 'ethereum', 'symbol': 'ETH'},
+    'polygon': {'explorer_url': '[https://polygonscan.com](https://polygonscan.com)', 'rpc_subdomain': 'polygon-mainnet', 'coingecko_id': 'matic-network', 'symbol': 'MATIC'},
+    'bsc': {'explorer_url': '[https://bscscan.com](https://bscscan.com)', 'rpc_subdomain': 'bsc-mainnet', 'coingecko_id': 'binancecoin', 'symbol': 'BNB'},
+    'avalanche': {'explorer_url': '[https://snowtrace.io](https://snowtrace.io)', 'rpc_subdomain': 'avax-mainnet', 'coingecko_id': 'avalanche-2', 'symbol': 'AVAX'},
+    'fantom': {'explorer_url': '[https://ftmscan.com](https://ftmscan.com)', 'rpc_subdomain': 'fantom-mainnet', 'coingecko_id': 'fantom', 'symbol': 'FTM'},
+    'mantle': {'explorer_url': '[https://mantlescan.xyz](https://mantlescan.xyz)', 'rpc_subdomain': 'mantle-mainnet', 'coingecko_id': 'mantle', 'symbol': 'MNT'},
+    'cronos': {'explorer_url': '[https://cronoscan.com](https://cronoscan.com)', 'rpc_subdomain': 'cronos-mainnet', 'coingecko_id': 'crypto-com-chain', 'symbol': 'CRO'},
+    'gnosis': {'explorer_url': '[https://gnosisscan.io](https://gnosisscan.io)', 'rpc_subdomain': 'gnosis-mainnet', 'coingecko_id': 'xdai', 'symbol': 'xDAI'},
+    'celo': {'explorer_url': '[https://celoscan.io](https://celoscan.io)', 'rpc_subdomain': 'celo-mainnet', 'coingecko_id': 'celo', 'symbol': 'CELO'},
+    'astar': {'explorer_url': '[https://astar.subscan.io](https://astar.subscan.io)', 'rpc_subdomain': 'astar-mainnet', 'coingecko_id': 'astar', 'symbol': 'ASTR'},
+    'metis': {'explorer_url': '[https://andromeda-explorer.metis.io](https://andromeda-explorer.metis.io)', 'rpc_subdomain': 'metis-mainnet', 'coingecko_id': 'metis-token', 'symbol': 'METIS'},
+    'degen': {'explorer_url': '[https://explorer.degen.tips](https://explorer.degen.tips)', 'rpc_subdomain': 'degen-mainnet', 'coingecko_id': 'degen-base', 'symbol': 'DEGEN'},
+    'opbnb': {'explorer_url': '[https://opbnb.bscscan.com](https://opbnb.bscscan.com)', 'rpc_subdomain': 'opbnb-mainnet', 'coingecko_id': 'binancecoin', 'symbol': 'BNB'},
 }
 
-def make_rpc_request(rpc_url, method, params):
-    payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
-    try:
-        response = requests.post(rpc_url, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logging.error(f"Error saat melakukan request ke RPC: {e}")
-    return None
-
-def get_price(coingecko_id):
-    """Mengambil harga dari CoinGecko API."""
-    try:
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data.get(coingecko_id, {}).get('usd')
-    except Exception as e:
-        logging.error(f"Gagal mengambil harga untuk {coingecko_id}: {e}")
-    return None
-
 async def send_photo_async(user_id, image_buffer, caption):
-    """Fungsi async wrapper untuk send_photo agar tidak ada warning."""
+    """Fungsi async wrapper untuk send_photo."""
     try:
         await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
         logging.info(f"Kuitansi gambar BERHASIL dikirim ke user {user_id}")
@@ -122,7 +100,7 @@ def process_and_send(tx, chain_name, chain_data, triggered_address):
 
 def monitor_chain(chain_name, chain_data):
     """Fungsi utama untuk memantau satu jaringan dengan metode polling `getAssetTransfers`."""
-    rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
+    rpc_url = f"https://{chain_data['rpc_subdomain']}[.g.alchemy.com/v2/](https://.g.alchemy.com/v2/){config.ALCHEMY_API_KEY}"
     logging.info(f"[{chain_name}] Memulai pemantauan dengan metode `getAssetTransfers` ke {rpc_url}")
     last_processed_block = -1
 
@@ -181,7 +159,7 @@ def monitor_chain(chain_name, chain_data):
 
 def main():
     """Fungsi utama yang menjalankan semua monitor dalam thread terpisah."""
-    logging.info("Memulai Mesin Pemantau (Versi Alias & Settings)...")
+    logging.info("Memulai Mesin Pemantau (Versi Final)...")
     database.setup_database()
     
     threads = []

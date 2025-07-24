@@ -1,3 +1,5 @@
+# Isi untuk file: requirements.txt
+# Menghapus websockets yang tidak lagi digunakan
 python-telegram-bot==21.2
 requests
 Pillow

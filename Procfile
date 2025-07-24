@@ -1,2 +1,3 @@
-bot: python bot.py
+# Isi untuk Procfile
+bot: python main.py
 worker: python monitor.py

@@ -1,4 +1,4 @@
-# database.py (Versi Final dengan get_wallet_by_id)
+# database.py (Versi dengan Alias & Settings)
 
 import sqlite3
 
@@ -8,6 +8,7 @@ def setup_database():
     """Mempersiapkan semua tabel yang dibutuhkan."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
+    # Tambahkan kolom 'alias' ke tabel wallets
     try:
         cursor.execute("ALTER TABLE wallets ADD COLUMN alias TEXT")
     except sqlite3.OperationalError:
@@ -24,6 +25,7 @@ def setup_database():
         )
     ''')
     
+    # Buat tabel baru untuk pengaturan pengguna
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_settings (
             user_id INTEGER PRIMARY KEY,
@@ -60,6 +62,15 @@ def get_wallets_by_user(user_id):
     conn.close()
     return wallets
 
+def get_wallet_by_id(wallet_id, user_id):
+    """Mengambil detail satu wallet berdasarkan ID uniknya."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT wallet_address, chain FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
+    wallet = cursor.fetchone()
+    conn.close()
+    return wallet
+
 def remove_wallet_by_id(wallet_id, user_id):
     """Menghapus wallet berdasarkan ID uniknya."""
     conn = sqlite3.connect(DATABASE_NAME)
@@ -69,6 +80,15 @@ def remove_wallet_by_id(wallet_id, user_id):
     conn.commit()
     conn.close()
     return success
+
+def get_active_chains():
+    """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT chain FROM wallets")
+    chains = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return chains
 
 def get_user_settings(user_id):
     """Mengambil pengaturan untuk seorang pengguna."""
@@ -96,21 +116,3 @@ def update_user_setting(user_id, key, value):
     conn.commit()
     conn.close()
     return True
-
-def get_active_chains():
-    """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT chain FROM wallets")
-    chains = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return chains
-
-def get_wallet_by_id(wallet_id, user_id):
-    """Mengambil detail satu wallet berdasarkan ID uniknya."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT wallet_address, chain FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
-    wallet = cursor.fetchone()
-    conn.close()
-    return wallet
