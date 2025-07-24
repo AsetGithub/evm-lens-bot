@@ -1,4 +1,9 @@
-# monitor.py (Versi Final dengan perbaikan alchemy_getAssetTransfers)
+threads:
+        thread.join()
+
+if __name__ == "__main__":
+    main()
+# monitor.py (Versi Final dengan semua perbaikan)
 
 import time
 import logging
@@ -135,7 +140,7 @@ def monitor_chain(chain_name, chain_data):
                     "fromBlock": hex(last_processed_block + 1),
                     "toBlock": hex(latest_block),
                     "address": wallets_to_monitor,
-                    "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+                    "category": ["external", "erc20", "erc721", "erc1155"],
                     "withMetadata": True,
                     "excludeZeroValue": False,
                 }]
