@@ -11,15 +11,13 @@ import config
 import database
 from image_generator import create_transaction_image
 from bot.utils import get_price, make_rpc_request
-from constants import CHAIN_CONFIG # <-- PERUBAHAN DI SINI
+from constants import CHAIN_CONFIG # <-- PERUBAHAN PENTING
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
-# CHAIN_CONFIG sekarang dipindahkan ke constants.py
-
+# (Sisa kode dari sini hingga akhir tidak berubah dari versi terakhir yang berfungsi)
 async def send_photo_async(user_id, image_buffer, caption):
-    """Fungsi async wrapper untuk send_photo."""
     try:
         await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')
         logging.info(f"Kuitansi gambar BERHASIL dikirim ke user {user_id}")
@@ -28,9 +26,7 @@ async def send_photo_async(user_id, image_buffer, caption):
         logging.error(f"Gagal mengirim foto ke user {user_id}: {e}")
 
 def process_and_send(tx, chain_name, chain_data, triggered_address):
-    """Memproses data transaksi dan mengirim notifikasi jika sesuai pengaturan pengguna."""
     is_outgoing = triggered_address.lower() == tx['from'].lower()
-    
     symbol = tx.get('asset')
     value = tx.get('value')
     is_airdrop = False
@@ -78,7 +74,6 @@ def process_and_send(tx, chain_name, chain_data, triggered_address):
             asyncio.run(send_photo_async(user_id, image_buffer, caption))
 
 def monitor_chain(chain_name, chain_data):
-    """Fungsi utama untuk memantau satu jaringan dengan metode polling `getAssetTransfers`."""
     rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     logging.info(f"[{chain_name}] Memulai pemantauan dengan metode `getAssetTransfers` ke {rpc_url}")
     last_processed_block = -1
