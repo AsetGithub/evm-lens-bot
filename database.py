@@ -1,4 +1,4 @@
-# database.py (Versi Final dengan fungsi yang hilang)
+# database.py (Versi Final dengan get_wallet_by_id)
 
 import sqlite3
 
@@ -8,7 +8,6 @@ def setup_database():
     """Mempersiapkan semua tabel yang dibutuhkan."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Tambahkan kolom 'alias' ke tabel wallets
     try:
         cursor.execute("ALTER TABLE wallets ADD COLUMN alias TEXT")
     except sqlite3.OperationalError:
@@ -25,7 +24,6 @@ def setup_database():
         )
     ''')
     
-    # Buat tabel baru untuk pengaturan pengguna
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_settings (
             user_id INTEGER PRIMARY KEY,
@@ -72,26 +70,19 @@ def remove_wallet_by_id(wallet_id, user_id):
     conn.close()
     return success
 
-# --- Fungsi Baru untuk Pengaturan ---
-
 def get_user_settings(user_id):
     """Mengambil pengaturan untuk seorang pengguna."""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Pastikan tabel ada sebelum mencoba mengambil data
     cursor.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user_id,))
     conn.commit()
-    
     cursor.execute("SELECT min_value_usd, notify_on_airdrop FROM user_settings WHERE user_id = ?", (user_id,))
     settings = cursor.fetchone()
     conn.close()
-
-    # Fallback ke default jika karena alasan tertentu settings masih None
     if settings:
         return {'min_value_usd': settings[0], 'notify_on_airdrop': bool(settings[1])}
     else:
         return {'min_value_usd': 0, 'notify_on_airdrop': True}
-
 
 def update_user_setting(user_id, key, value):
     """Memperbarui satu pengaturan spesifik untuk pengguna."""
@@ -99,16 +90,13 @@ def update_user_setting(user_id, key, value):
     cursor = conn.cursor()
     if key not in ['min_value_usd', 'notify_on_airdrop']:
         return False
-    
     if isinstance(value, bool):
         value = 1 if value else 0
-        
-    cursor.execute("UPDATE user_settings SET {key} = ? WHERE user_id = ?".format(key=key), (value, user_id))
+    cursor.execute(f"UPDATE user_settings SET {key} = ? WHERE user_id = ?", (value, user_id))
     conn.commit()
     conn.close()
     return True
 
-# --- FUNGSI YANG HILANG DAN DITAMBAHKAN KEMBALI ---
 def get_active_chains():
     """Mengambil daftar unik semua jaringan yang memiliki wallet terdaftar."""
     conn = sqlite3.connect(DATABASE_NAME)
@@ -117,3 +105,12 @@ def get_active_chains():
     chains = [row[0] for row in cursor.fetchall()]
     conn.close()
     return chains
+
+def get_wallet_by_id(wallet_id, user_id):
+    """Mengambil detail satu wallet berdasarkan ID uniknya."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT wallet_address, chain FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
+    wallet = cursor.fetchone()
+    conn.close()
+    return wallet
