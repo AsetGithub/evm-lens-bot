@@ -1,4 +1,4 @@
-# bot.py (Versi Final dengan Pelacak Gas Fee)
+# bot.py (Versi Final dengan /help dan pembaruan lainnya)
 
 import logging
 import requests
@@ -21,6 +21,7 @@ logging.basicConfig(
 GET_ADDRESS, SELECT_CHAIN, GET_ALIAS = range(3)
 SET_MIN_VALUE = range(3, 4)
 
+# --- (Semua fungsi dari make_rpc_request hingga start tetap sama) ---
 def make_rpc_request(rpc_url, method, params):
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     try:
@@ -39,12 +40,11 @@ def get_main_menu_keyboard():
         ],
         [InlineKeyboardButton("📊 Cek Portfolio", callback_data='portfolio_start')],
         [InlineKeyboardButton("⚙️ Pengaturan Notifikasi", callback_data='settings_menu')],
-        [InlineKeyboardButton("⛽ Cek Gas Fee", callback_data='gas_start')] # Tombol baru
+        [InlineKeyboardButton("⛽ Cek Gas Fee", callback_data='gas_start')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_network_keyboard(callback_prefix):
-    """Membuat keyboard jaringan dengan prefix callback yang berbeda."""
     keyboard = []
     row = []
     for chain in CHAIN_CONFIG.keys():
@@ -64,9 +64,26 @@ async def start(update: Update, context):
         await update.message.reply_html(text, reply_markup=get_main_menu_keyboard())
     return ConversationHandler.END
 
-# ... (Semua fungsi lain dari add_wallet hingga portfolio tetap sama persis) ...
-# (Saya sertakan di bawah untuk kelengkapan penuh)
+# --- Perintah Bantuan /help (BARU) ---
+async def help_command(update: Update, context):
+    # GANTI "LINK_TELEGRAPH_ANDA" DENGAN LINK YANG SUDAH ANDA BUAT
+    telegraph_url = "LINK_TELEGRAPH_ANDA" 
+    
+    text = (
+        "❓ **Bantuan EVM Lens Bot**\n\n"
+        "Berikut adalah daftar perintah dan fungsi yang bisa Anda gunakan:\n\n"
+        "🔹 **Tambah/Hapus Wallet:** Gunakan tombol di menu utama untuk mengelola daftar wallet yang Anda pantau.\n\n"
+        "🔹 **Cek Portfolio:** Lihat daftar lengkap Token (ERC-20) dan koleksi NFT yang Anda miliki.\n\n"
+        "🔹 **Pengaturan Notifikasi:** Atur preferensi notifikasi Anda, seperti nilai minimum transaksi atau mematikan notifikasi airdrop.\n\n"
+        "🔹 **Cek Gas Fee:** Periksa biaya transaksi di berbagai jaringan secara real-time.\n\n"
+        "Untuk informasi lebih detail, roadmap, dan info tentang author, silakan kunjungi halaman informasi kami."
+    )
+    
+    keyboard = [[InlineKeyboardButton("📖 Baca Info Lengkap & Roadmap", url=telegraph_url)]]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
+# --- (Sisa kode dari add_wallet_start hingga akhir tetap sama persis) ---
 async def add_wallet_start(update: Update, context):
     query = update.callback_query; await query.answer()
     await query.edit_message_text(text="✍️ Oke, kirim alamat wallet (contoh: 0x...) yang ingin Anda pantau.")
@@ -278,48 +295,37 @@ async def toggle_airdrop(update: Update, context):
     database.update_user_setting(user_id, 'notify_on_airdrop', new_value)
     await settings_menu(update, context)
 
-# --- Fitur Pelacak Gas Fee (BARU) ---
 async def gas_start(update: Update, context):
     """Memulai alur pengecekan gas, menampilkan pilihan jaringan."""
-    query = update.callback_query; await query.answer()
-    await query.edit_message_text(
-        text="⛽ Pilih jaringan untuk memeriksa gas fee:",
-        reply_markup=get_network_keyboard('gas_')
-    )
+    if update.callback_query:
+        query = update.callback_query; await query.answer()
+        await query.edit_message_text(text="⛽ Pilih jaringan untuk memeriksa gas fee:", reply_markup=get_network_keyboard('gas_'))
+    else: # Jika dari command /gas
+        await update.message.reply_text(text="⛽ Pilih jaringan untuk memeriksa gas fee:", reply_markup=get_network_keyboard('gas_'))
 
 async def get_gas_price(update: Update, context):
     """Mengambil dan menampilkan harga gas untuk jaringan yang dipilih."""
     query = update.callback_query; await query.answer()
     chain = query.data.split('_')[1]
-    
     await query.edit_message_text(f"⏳ Sedang memeriksa gas fee di jaringan {chain.title()}...")
-
     chain_data = CHAIN_CONFIG.get(chain, {})
     rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
-    
     response = make_rpc_request(rpc_url, "eth_gasPrice", [])
-    
     if response and 'result' in response:
         gas_price_wei = int(response['result'], 16)
         gas_price_gwei = gas_price_wei / 1e9
-        text = (
-            f"⛽ **Gas Fee Saat Ini ({chain.title()})**\n\n"
-            f"🔹 **{gas_price_gwei:.2f} Gwei**"
-        )
+        text = f"⛽ **Gas Fee Saat Ini ({chain.title()})**\n\n🔹 **{gas_price_gwei:.2f} Gwei**"
     else:
         text = f"❌ Gagal mengambil data gas fee untuk jaringan {chain.title()}."
-
     keyboard = [
         [InlineKeyboardButton("🔎 Cek Jaringan Lain", callback_data='gas_start')],
         [InlineKeyboardButton("⬅️ Kembali ke Menu Utama", callback_data='main_menu')]
     ]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
-# --- Main ---
 def main():
     database.setup_database()
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
-
     add_wallet_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(add_wallet_start, pattern='^add_wallet_start$')],
         states={
@@ -329,14 +335,13 @@ def main():
         },
         fallbacks=[CommandHandler('start', start), CallbackQueryHandler(start, pattern='^main_menu$')]
     )
-    
     settings_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_min_value_start, pattern='^set_min_value_start$')],
         states={ SET_MIN_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_min_value_received)] },
         fallbacks=[CommandHandler('start', start), CallbackQueryHandler(start, pattern='^main_menu$')]
     )
-
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command)) # Tambahkan handler /help
     application.add_handler(add_wallet_conv)
     application.add_handler(settings_conv)
     application.add_handler(CallbackQueryHandler(my_wallets, pattern='^my_wallets$'))
@@ -348,15 +353,12 @@ def main():
     application.add_handler(CallbackQueryHandler(get_portfolio_nft, pattern='^portfolio_nft_'))
     application.add_handler(CallbackQueryHandler(settings_menu, pattern='^settings_menu$'))
     application.add_handler(CallbackQueryHandler(toggle_airdrop, pattern='^toggle_airdrop$'))
-    
-    # Handlers untuk fitur Gas Fee (BARU)
-    application.add_handler(CommandHandler("gas", gas_start)) # Bisa via command /gas
+    application.add_handler(CommandHandler("gas", gas_start))
     application.add_handler(CallbackQueryHandler(gas_start, pattern='^gas_start$'))
     application.add_handler(CallbackQueryHandler(get_gas_price, pattern='^gas_'))
-
     application.add_handler(CallbackQueryHandler(start, pattern='^main_menu$'))
     
-    print("Bot berjalan dengan fitur Pelacak Gas Fee...")
+    print("Bot berjalan dengan semua fitur profesional...")
     application.run_polling()
 
 if __name__ == '__main__':
