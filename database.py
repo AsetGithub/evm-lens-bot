@@ -83,6 +83,15 @@ def get_active_chains():
     conn.close()
     return chains
 
+def get_all_wallets_by_chain(chain_name):
+    """Mengambil semua alamat wallet unik untuk jaringan tertentu."""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT wallet_address FROM wallets WHERE chain = ?", (chain_name.lower(),))
+    wallets = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return wallets
+
 def get_user_settings(user_id):
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()

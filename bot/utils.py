@@ -3,7 +3,7 @@
 import requests
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from constants import CHAIN_CONFIG # <-- PERUBAHAN PENTING
+from constants import CHAIN_CONFIG
 
 def make_rpc_request(rpc_url, method, params):
     """Fungsi pembantu untuk membuat permintaan JSON-RPC."""

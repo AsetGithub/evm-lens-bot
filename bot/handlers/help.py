@@ -3,7 +3,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 
 async def help_command(update: Update, context):
-    telegraph_url = "[https://telegra.ph/Selamat-Datang-di-EVM-Lens-Bot-Beta-07-24](https://telegra.ph/Selamat-Datang-di-EVM-Lens-Bot-Beta-07-24)" 
+    telegraph_url = "https://telegra.ph/Selamat-Datang-di-EVM-Lens-Bot-Beta-07-24" 
     
     text = (
         "❓ **Bantuan EVM Lens Bot**\n\n"

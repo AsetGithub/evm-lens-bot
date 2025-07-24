@@ -11,12 +11,11 @@ import config
 import database
 from image_generator import create_transaction_image
 from bot.utils import get_price, make_rpc_request
-from constants import CHAIN_CONFIG # <-- PERUBAHAN PENTING
+from constants import CHAIN_CONFIG
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 bot = Bot(token=config.TELEGRAM_TOKEN)
 
-# (Sisa kode dari sini hingga akhir tidak berubah dari versi terakhir yang berfungsi)
 async def send_photo_async(user_id, image_buffer, caption):
     try:
         await bot.send_photo(chat_id=user_id, photo=image_buffer, caption=caption, parse_mode='HTML')

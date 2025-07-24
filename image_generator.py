@@ -1,12 +1,12 @@
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
 import io
-import logging # Tambahkan ini
+import logging
 
 # Konfigurasi gambar
 IMG_WIDTH = 800
 IMG_HEIGHT = 450
-FONT_FILE = "PermanentMarker-Regular.ttf" # Pastikan nama ini sama persis dengan file Anda
+FONT_FILE = "PermanentMarker-Regular.ttf"
 
 def create_transaction_image(tx_data):
     """

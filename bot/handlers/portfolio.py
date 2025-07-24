@@ -4,7 +4,7 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 import database
 import config
-from monitor import CHAIN_CONFIG
+from constants import CHAIN_CONFIG
 from bot.utils import make_rpc_request, get_price
 
 async def portfolio_start(update: Update, context):
@@ -52,7 +52,7 @@ async def get_portfolio_erc20(update: Update, context):
         return
     address, chain = wallet_data
     chain_data = CHAIN_CONFIG.get(chain, {}); explorer_url = chain_data.get('explorer_url')
-    rpc_url = f"https://{chain_data['rpc_subdomain']}[.g.alchemy.com/v2/](https://.g.alchemy.com/v2/){config.ALCHEMY_API_KEY}"
+    rpc_url = f"https://{chain_data['rpc_subdomain']}.g.alchemy.com/v2/{config.ALCHEMY_API_KEY}"
     
     # Ambil saldo native
     native_balance_hex = make_rpc_request(rpc_url, "eth_getBalance", [address, "latest"]).get('result', '0x0')
@@ -106,7 +106,7 @@ async def get_portfolio_nft(update: Update, context):
         await query.edit_message_text("Jaringan tidak didukung untuk NFT.")
         return
         
-    api_url = f"https://{network_subdomain}[.g.alchemy.com/nft/v3/](https://.g.alchemy.com/nft/v3/){config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}&withMetadata=true"
+    api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}&withMetadata=true"
     try:
         response = requests.get(api_url); response.raise_for_status(); data = response.json()
     except Exception as e:
@@ -128,7 +128,7 @@ async def get_portfolio_nft(update: Update, context):
             contract_address = nfts[0].get('contract', {}).get('address')
             floor_price_text = ""
             if contract_address:
-                floor_api_url = f"https://{network_subdomain}[.g.alchemy.com/nft/v3/](https://.g.alchemy.com/nft/v3/){config.ALCHEMY_API_KEY}/getFloorPrice?contractAddress={contract_address}"
+                floor_api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getFloorPrice?contractAddress={contract_address}"
                 try:
                     floor_res = requests.get(floor_api_url).json()
                     if floor_res.get('openSea', {}).get('floorPrice'):
