@@ -1,130 +1,325 @@
-# database.py (Versi dengan Alias & Settings + Missing Method)
+# database.py - Extension untuk Price Alert System
+# Indonesia: Tambahan fungsi database untuk sistem alert harga
 
 import sqlite3
+from datetime import datetime
 
-DATABASE_NAME = 'wallets.db'
+# Indonesia: Tambahkan fungsi-fungsi ini ke database.py yang sudah ada
 
-def setup_database():
-    """Mempersiapkan semua tabel yang dibutuhkan."""
+def setup_price_alerts_table():
+    """Indonesia: Setup tabel untuk sistem alert harga"""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    try:
-        cursor.execute("ALTER TABLE wallets ADD COLUMN alias TEXT")
-    except sqlite3.OperationalError:
-        pass
-
+    
+    # Indonesia: Tabel untuk menyimpan alert harga user
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS wallets (
+        CREATE TABLE IF NOT EXISTS price_alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            wallet_address TEXT NOT NULL,
+            token_address TEXT NOT NULL,
+            token_symbol TEXT NOT NULL,
             chain TEXT NOT NULL,
-            alias TEXT,
-            UNIQUE(user_id, wallet_address, chain)
+            alert_type TEXT NOT NULL, -- 'above', 'below', 'percent'
+            target_price REAL,
+            target_percentage REAL,
+            current_price_when_created REAL,
+            is_active INTEGER DEFAULT 1,
+            is_triggered INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            triggered_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES wallets (user_id)
         )
     ''')
     
+    # Indonesia: Tabel untuk log notifikasi yang sudah dikirim
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_settings (
-            user_id INTEGER PRIMARY KEY,
-            min_value_usd REAL DEFAULT 0,
-            notify_on_airdrop INTEGER DEFAULT 1
+        CREATE TABLE IF NOT EXISTS alert_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            notification_type TEXT NOT NULL, -- 'price_reached', 'reminder'
+            message_text TEXT,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (alert_id) REFERENCES price_alerts (id)
         )
     ''')
+    
+    # Indonesia: Tabel untuk statistik penggunaan alert
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS alert_statistics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date DATE NOT NULL,
+            total_alerts_created INTEGER DEFAULT 0,
+            total_alerts_triggered INTEGER DEFAULT 0,
+            most_popular_token TEXT,
+            most_popular_chain TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     conn.commit()
     conn.close()
-    print("Database siap digunakan dengan skema terbaru.")
+    print("Indonesia: Tabel price alerts berhasil dibuat.")
 
-def add_wallet(user_id, wallet_address, chain, alias):
+def create_price_alert(alert_data):
+    """Indonesia: Buat alert harga baru"""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
+    
     try:
-        cursor.execute(
-            "INSERT INTO wallets (user_id, wallet_address, chain, alias) VALUES (?, ?, ?, ?)",
-            (user_id, wallet_address.lower(), chain.lower(), alias)
-        )
+        cursor.execute('''
+            INSERT INTO price_alerts (
+                user_id, token_address, token_symbol, chain, alert_type,
+                target_price, target_percentage, current_price_when_created
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            alert_data['user_id'],
+            alert_data['token_address'].lower(),
+            alert_data['token_symbol'],
+            alert_data['chain'].lower(),
+            alert_data['alert_type'],
+            alert_data.get('target_price'),
+            alert_data.get('target_percentage'),
+            alert_data.get('current_price', 0)
+        ))
+        
+        alert_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        # Indonesia: Update statistik
+        update_daily_alert_stats('created')
+        
+        return alert_id
+        
+    except sqlite3.Error as e:
+        print(f"Indonesia: Error membuat alert: {e}")
+        conn.close()
+        return None
+
+def get_user_active_alerts(user_id):
+    """Indonesia: Ambil semua alert aktif untuk user tertentu"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, token_address, token_symbol, chain, alert_type,
+               target_price, target_percentage, created_at
+        FROM price_alerts 
+        WHERE user_id = ? AND is_active = 1 AND is_triggered = 0
+        ORDER BY created_at DESC
+    ''', (user_id,))
+    
+    alerts = []
+    for row in cursor.fetchall():
+        alerts.append({
+            'id': row[0],
+            'token_address': row[1],
+            'token_symbol': row[2],
+            'chain': row[3],
+            'alert_type': row[4],
+            'target_price': row[5],
+            'target_percentage': row[6],
+            'created_at': row[7]
+        })
+    
+    conn.close()
+    return alerts
+
+def get_all_active_alerts():
+    """Indonesia: Ambil semua alert aktif untuk monitoring"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, user_id, token_address, token_symbol, chain, alert_type,
+               target_price, target_percentage, current_price_when_created
+        FROM price_alerts 
+        WHERE is_active = 1 AND is_triggered = 0
+    ''')
+    
+    alerts = []
+    for row in cursor.fetchall():
+        alerts.append({
+            'id': row[0],
+            'user_id': row[1],
+            'token_address': row[2],
+            'token_symbol': row[3],
+            'chain': row[4],
+            'alert_type': row[5],
+            'target_price': row[6],
+            'target_percentage': row[7],
+            'created_price': row[8]
+        })
+    
+    conn.close()
+    return alerts
+
+def trigger_price_alert(alert_id, current_price):
+    """Indonesia: Tandai alert sebagai triggered"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE price_alerts 
+            SET is_triggered = 1, triggered_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (alert_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        # Indonesia: Update statistik
+        update_daily_alert_stats('triggered')
+        
+        return True
+        
+    except sqlite3.Error as e:
+        print(f"Indonesia: Error trigger alert: {e}")
+        conn.close()
+        return False
+
+def delete_price_alert(alert_id, user_id):
+    """Indonesia: Hapus alert (hanya pemilik yang bisa hapus)"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE price_alerts 
+            SET is_active = 0 
+            WHERE id = ? AND user_id = ?
+        ''', (alert_id, user_id))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        
+        return success
+        
+    except sqlite3.Error as e:
+        print(f"Indonesia: Error hapus alert: {e}")
+        conn.close()
+        return False
+
+def log_alert_notification(alert_id, user_id, notification_type, message_text):
+    """Indonesia: Log notifikasi yang sudah dikirim"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO alert_notifications (alert_id, user_id, notification_type, message_text)
+            VALUES (?, ?, ?, ?)
+        ''', (alert_id, user_id, notification_type, message_text))
+        
         conn.commit()
         conn.close()
         return True
-    except sqlite3.IntegrityError:
+        
+    except sqlite3.Error as e:
+        print(f"Indonesia: Error log notifikasi: {e}")
         conn.close()
         return False
 
-def get_wallets_by_user(user_id):
+def update_daily_alert_stats(action_type):
+    """Indonesia: Update statistik harian penggunaan alert"""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, wallet_address, chain, alias FROM wallets WHERE user_id = ?", (user_id,))
-    wallets = cursor.fetchall()
-    conn.close()
-    return wallets
+    
+    today = datetime.now().date()
+    
+    try:
+        # Indonesia: Cek apakah sudah ada record untuk hari ini
+        cursor.execute('SELECT id FROM alert_statistics WHERE date = ?', (today,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            if action_type == 'created':
+                cursor.execute('''
+                    UPDATE alert_statistics 
+                    SET total_alerts_created = total_alerts_created + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE date = ?
+                ''', (today,))
+            elif action_type == 'triggered':
+                cursor.execute('''
+                    UPDATE alert_statistics 
+                    SET total_alerts_triggered = total_alerts_triggered + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE date = ?
+                ''', (today,))
+        else:
+            # Indonesia: Buat record baru untuk hari ini
+            created_count = 1 if action_type == 'created' else 0
+            triggered_count = 1 if action_type == 'triggered' else 0
+            
+            cursor.execute('''
+                INSERT INTO alert_statistics (date, total_alerts_created, total_alerts_triggered)
+                VALUES (?, ?, ?)
+            ''', (today, created_count, triggered_count))
+        
+        conn.commit()
+        conn.close()
+        
+    except sqlite3.Error as e:
+        print(f"Indonesia: Error update statistik: {e}")
+        conn.close()
 
-def get_wallet_by_id(wallet_id, user_id):
+def get_popular_alert_tokens():
+    """Indonesia: Ambil token yang paling banyak di-alert"""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT wallet_address, chain FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
-    wallet = cursor.fetchone()
+    
+    cursor.execute('''
+        SELECT token_symbol, chain, COUNT(*) as alert_count
+        FROM price_alerts 
+        WHERE created_at >= date('now', '-30 days')
+        GROUP BY token_symbol, chain
+        ORDER BY alert_count DESC
+        LIMIT 10
+    ''')
+    
+    popular_tokens = []
+    for row in cursor.fetchall():
+        popular_tokens.append({
+            'symbol': row[0],
+            'chain': row[1],
+            'alert_count': row[2]
+        })
+    
     conn.close()
-    return wallet
+    return popular_tokens
 
-def remove_wallet_by_id(wallet_id, user_id):
+def get_user_alert_summary(user_id):
+    """Indonesia: Ambil ringkasan alert user (untuk laporan)"""
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM wallets WHERE id = ? AND user_id = ?", (wallet_id, user_id))
-    success = cursor.rowcount > 0
-    conn.commit()
+    
+    # Indonesia: Hitung total alert
+    cursor.execute('SELECT COUNT(*) FROM price_alerts WHERE user_id = ?', (user_id,))
+    total_alerts = cursor.fetchone()[0]
+    
+    # Indonesia: Hitung alert yang sudah triggered
+    cursor.execute('SELECT COUNT(*) FROM price_alerts WHERE user_id = ? AND is_triggered = 1', (user_id,))
+    triggered_alerts = cursor.fetchone()[0]
+    
+    # Indonesia: Hitung alert aktif
+    cursor.execute('SELECT COUNT(*) FROM price_alerts WHERE user_id = ? AND is_active = 1 AND is_triggered = 0', (user_id,))
+    active_alerts = cursor.fetchone()[0]
+    
     conn.close()
-    return success
+    
+    return {
+        'total_alerts': total_alerts,
+        'triggered_alerts': triggered_alerts,
+        'active_alerts': active_alerts,
+        'success_rate': (triggered_alerts / total_alerts * 100) if total_alerts > 0 else 0
+    }
 
-def get_active_chains():
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT chain FROM wallets")
-    chains = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return chains
-
-def get_all_wallets_by_chain(chain_name):
-    """Mengambil semua alamat wallet unik untuk jaringan tertentu."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT wallet_address FROM wallets WHERE chain = ?", (chain_name.lower(),))
-    wallets = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return wallets
-
-def get_users_for_wallet(wallet_address, chain_name):
-    """ADDED: Missing method - Mengambil semua user_id yang memantau wallet tertentu."""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT DISTINCT user_id FROM wallets WHERE wallet_address = ? AND chain = ?", 
-        (wallet_address.lower(), chain_name.lower())
-    )
-    user_ids = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return user_ids
-
-def get_user_settings(user_id):
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user_id,))
-    conn.commit()
-    cursor.execute("SELECT min_value_usd, notify_on_airdrop FROM user_settings WHERE user_id = ?", (user_id,))
-    settings = cursor.fetchone()
-    conn.close()
-    if settings:
-        return {'min_value_usd': settings[0], 'notify_on_airdrop': bool(settings[1])}
-    else:
-        return {'min_value_usd': 0, 'notify_on_airdrop': True}
-
-def update_user_setting(user_id, key, value):
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    if key not in ['min_value_usd', 'notify_on_airdrop']:
-        return False
-    if isinstance(value, bool):
-        value = 1 if value else 0
-    cursor.execute(f"UPDATE user_settings SET {key} = ? WHERE user_id = ?", (value, user_id))
-    conn.commit()
-    conn.close()
-    return True
+# Indonesia: Jangan lupa panggil ini saat setup database
+def setup_enhanced_database():
+    """Indonesia: Setup database dengan semua tabel yang diperlukan"""
+    setup_database()  # Indonesia: Setup tabel yang sudah ada
+    setup_price_alerts_table()  # Indonesia: Setup tabel baru untuk alerts
