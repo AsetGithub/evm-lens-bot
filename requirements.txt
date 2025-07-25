@@ -2,3 +2,5 @@ python-telegram-bot==21.2
 requests
 Pillow
 qrcode
+asyncio
+aiohttp
