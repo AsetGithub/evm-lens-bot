@@ -102,6 +102,7 @@ async def get_portfolio_erc20(update: Update, context):
     text += f"\n---\n💰 **Total Estimasi Nilai: ${total_usd_value:,.2f}**"
     keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data=f"portfolio_select_{wallet_id}")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+    
 
 async def get_portfolio_nft(update: Update, context):
     """Menampilkan portfolio NFT dengan harga dasar."""
