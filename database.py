@@ -235,3 +235,25 @@ def add_wallet(user_id, address, chain, alias):
     finally:
         conn.close()
 
+# Tambahkan fungsi ini ke dalam file database.py
+
+def remove_wallet_by_id(wallet_id, user_id):
+    """Menghapus dompet berdasarkan ID uniknya dan ID pemilik."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # Kita hapus langsung dari database
+        cursor.execute(
+            'DELETE FROM wallets WHERE id = ? AND user_id = ?',
+            (wallet_id, user_id)
+        )
+        success = cursor.rowcount > 0 # rowcount > 0 berarti ada baris yang terhapus
+        conn.commit()
+        return success
+    except sqlite3.Error as e:
+        print(f"Error saat menghapus dompet by ID: {e}")
+        return False
+    finally:
+        conn.close()
+
+
