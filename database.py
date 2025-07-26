@@ -279,3 +279,65 @@ def get_wallet_by_id(wallet_id, user_id):
         conn.close()
 
 
+# Di dalam file database.py, cari fungsi setup_database()
+# dan tambahkan cursor.execute() ini di dalamnya.
+
+def setup_database():
+    """Membuat semua tabel yang diperlukan untuk bot."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # ... (kode CREATE TABLE untuk wallets dan price_alerts yang sudah ada) ...
+
+    # TAMBAHKAN INI:
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            min_value_usd REAL DEFAULT 0,
+            notify_on_airdrop BOOLEAN DEFAULT 1
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("Database setup selesai. Semua tabel sudah siap.")
+
+
+# Tambahkan kedua fungsi ini di mana saja di dalam file database.py
+
+def get_user_settings(user_id):
+    """Mengambil atau membuat pengaturan default untuk pengguna."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Cek apakah pengguna sudah punya pengaturan
+    cursor.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
+    settings = cursor.fetchone()
+    
+    if not settings:
+        # Jika tidak ada, buat pengaturan default dan simpan
+        cursor.execute("INSERT INTO user_settings (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        # Ambil lagi pengaturan yang baru dibuat
+        cursor.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
+        settings = cursor.fetchone()
+        
+    conn.close()
+    return dict(settings)
+
+def update_user_setting(user_id, key, value):
+    """Memperbarui satu pengaturan spesifik untuk pengguna."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # Menggunakan format string yang aman untuk nama kolom
+        sql = f"UPDATE user_settings SET {key} = ? WHERE user_id = ?"
+        cursor.execute(sql, (value, user_id))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error saat update setting: {e}")
+        return False
+    finally:
+        conn.close()
+
