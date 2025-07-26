@@ -109,27 +109,3 @@ async def get_portfolio_erc20(update: Update, context):
     text += f"\n---\n💰 **Total Estimasi Nilai: ${total_usd_value:,.2f}**"
     keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data=f"portfolio_select_{wallet_id}")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-
-
-async def get_portfolio_nft(update: Update, context):
-    """Menampilkan portfolio NFT."""
-    query = update.callback_query; await query.answer()
-    await query.edit_message_text("⏳ Sedang mengambil data NFT...")
-    wallet_id = int(query.data.split('_')[2])
-    
-    # --- PERBAIKAN DI SINI ---
-    wallet_data = database.get_wallet_by_id(wallet_id, update.effective_user.id)
-    if not wallet_data:
-        await query.edit_message_text("Wallet tidak ditemukan.")
-        return
-    address = wallet_data['address']
-    chain = wallet_data['chain']
-    
-    # ... (sisa kode tidak perlu diubah) ...
-    network_subdomain = CHAIN_CONFIG.get(chain, {}).get('rpc_subdomain')
-    if not network_subdomain:
-        await query.edit_message_text("Jaringan tidak didukung untuk NFT.")
-        return
-        
-    api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v3/{config.ALCHEMY_API_KEY}/getNFTsForOwner?owner={address}&withMetadata=true"
-    # ... (sisa kode sama seperti sebelumnya) ...
