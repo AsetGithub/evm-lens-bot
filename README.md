@@ -1,1 +1,0 @@
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/AsetGithub/evm-lens-bot?utm_source=oss&utm_medium=github&utm_campaign=AsetGithub%2Fevm-lens-bot&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
