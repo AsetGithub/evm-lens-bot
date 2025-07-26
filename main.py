@@ -45,7 +45,7 @@ def main():
     )
     
     # Indonesia: Setup database dengan tabel baru untuk alerts
-    database.setup_enhanced_database()
+    database.setup_database()
     
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
 
