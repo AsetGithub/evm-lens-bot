@@ -186,3 +186,25 @@ def get_active_chains():
         return []
     finally:
         conn.close()
+
+# Tambahkan fungsi ini ke dalam file database.py
+
+def get_wallets_by_user(user_id):
+    """Mengambil semua dompet yang terdaftar untuk seorang pengguna."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, alias, address, chain 
+            FROM wallets 
+            WHERE user_id = ?
+        ''', (user_id,))
+
+        wallets = [dict(row) for row in cursor.fetchall()]
+        return wallets
+
+    except sqlite3.Error as e:
+        print(f"Error mengambil dompet pengguna: {e}")
+        return []
+    finally:
+        conn.close()
