@@ -5,6 +5,53 @@ import sqlite3
 from datetime import datetime
 
 # Indonesia: Tambahkan fungsi-fungsi ini ke database.py yang sudah ada
+# Di dalam file database.py
+def get_db_connection():
+    """Membuat koneksi ke database SQLite."""
+    conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def setup_enhanced_database():
+    """Membuat tabel yang diperlukan jika belum ada, termasuk price_alerts."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Membuat tabel untuk manajemen wallet (contoh)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS wallets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            chain TEXT NOT NULL,
+            address TEXT NOT NULL UNIQUE,
+            alias TEXT
+        );
+    ''')
+    
+    # Membuat tabel baru untuk price alerts
+    print("Memeriksa dan membuat tabel 'price_alerts'...")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS price_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_address TEXT NOT NULL,
+            chain TEXT NOT NULL,
+            alert_type TEXT NOT NULL, -- 'above', 'below', atau 'percent'
+            target_price REAL, -- NULL jika alert_type adalah 'percent'
+            target_percentage REAL, -- NULL jika alert_type adalah 'above' atau 'below'
+            token_symbol TEXT NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("Setup database selesai. Tabel 'price_alerts' sudah siap.")
+
+# Pastikan fungsi lain yang Anda gunakan juga ada di file ini
+# seperti create_price_alert, get_user_active_alerts, delete_price_alert, dll.
+
 
 def setup_price_alerts_table():
     """Indonesia: Setup tabel untuk sistem alert harga"""
