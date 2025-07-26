@@ -1,4 +1,4 @@
-# bot/handlers/wallet_management.py
+# bot/handlers/wallet_management.py - VERSI SUDAH DIPERBAIKI
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ConversationHandler, MessageHandler, filters, CommandHandler
@@ -43,31 +43,68 @@ async def skip_alias(update: Update, context):
     return await get_alias(update, context)
 
 async def my_wallets(update: Update, context):
-    query = update.callback_query; await query.answer()
-    wallets = database.get_wallets_by_user(update.effective_user.id)
-    text = "📂 **Wallet Anda:**\n\n" if wallets else "Anda belum menambahkan wallet."
-    for _, address, chain, alias in wallets:
-        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
-        text += f"🔹 **{display_name}** ({chain.title()})\n   └ <code>{address}</code>\n"
-    keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+    # Mengambil atau merespons callback
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+    else: # Jika dipanggil dari /start setelah proses lain
+        query = None
+
+    user_id = update.effective_user.id
+    wallets = database.get_wallets_by_user(user_id) #
+    text = "📂 **Wallet Anda:**\n\n" if wallets else "Anda belum menambahkan wallet." #
+    
+    # --- PERBAIKAN DI SINI ---
+    # Kita iterasi list of dictionary, akses data pakai key ['nama_kolom']
+    for wallet in wallets:
+        address = wallet['address']
+        chain = wallet['chain']
+        alias = wallet['alias']
+        short_address = f"{address[:6]}...{address[-4:]}"
+        
+        text += f"🔹 **{alias}** ({chain.title()})\n   └ <code>{short_address}</code>\n" #
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Tambah Wallet", callback_data='add_wallet_start')],
+        [InlineKeyboardButton("🗑️ Hapus Wallet", callback_data='remove_wallet_menu')],
+        [InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]
+    ]
+    
+    # Kirim atau edit pesan
+    if query:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+    else:
+        # Jika dipanggil dari start(), kita kirim pesan baru
+        await context.bot.send_message(chat_id=user_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+
 
 async def remove_wallet_menu(update: Update, context):
     query = update.callback_query; await query.answer()
-    wallets = database.get_wallets_by_user(update.effective_user.id)
+    wallets = database.get_wallets_by_user(update.effective_user.id) #
+    
     if not wallets:
-        await query.edit_message_text("Tidak ada wallet untuk dihapus.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')]]))
+        await query.edit_message_text("Tidak ada wallet untuk dihapus.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Kembali", callback_data='my_wallets')]])) #
         return
+
     keyboard = []
-    for wid, address, chain, alias in wallets:
-        display_name = alias if alias else f"{address[:6]}...{address[-4:]}"
-        keyboard.append([InlineKeyboardButton(f"❌ Hapus '{display_name}' ({chain.title()})", callback_data=f"delete_{wid}")])
-    keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='main_menu')])
+    # --- PERBAIKAN DI SINI ---
+    # Iterasi dictionary dengan benar
+    for wallet in wallets:
+        wid = wallet['id']
+        alias = wallet['alias']
+        chain = wallet['chain']
+        keyboard.append([InlineKeyboardButton(f"❌ Hapus '{alias}' ({chain.title()})", callback_data=f"delete_{wid}")]) #
+        
+    keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='my_wallets')])
     await query.edit_message_text("Pilih wallet yang ingin dihapus:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def remove_wallet_confirm(update: Update, context):
     query = update.callback_query; await query.answer()
     wallet_id_to_delete = int(query.data.split('_')[1])
-    success = database.remove_wallet_by_id(wallet_id_to_delete, update.effective_user.id)
-    await query.edit_message_text("✅ Wallet berhasil dihapus." if success else "❌ Gagal menghapus wallet.")
-    await start(update, context)
+    success = database.remove_wallet_by_id(wallet_id_to_delete, update.effective_user.id) #
+    
+    text = "✅ Wallet berhasil dihapus." if success else "❌ Gagal menghapus wallet."
+    
+    # Setelah menghapus, tampilkan lagi daftar wallet yang tersisa
+    await query.edit_message_text(text)
+    await my_wallets(update, context) # Panggil my_wallets untuk refresh menu
