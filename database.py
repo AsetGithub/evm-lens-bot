@@ -257,3 +257,25 @@ def remove_wallet_by_id(wallet_id, user_id):
         conn.close()
 
 
+# Tambahkan fungsi ini ke dalam file database.py
+
+def get_wallet_by_id(wallet_id, user_id):
+    """Mengambil detail satu dompet berdasarkan ID uniknya dan ID pemilik."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        # Ambil satu baris data, pastikan wallet_id dan user_id cocok
+        cursor.execute(
+            'SELECT id, address, chain, alias FROM wallets WHERE id = ? AND user_id = ?',
+            (wallet_id, user_id)
+        )
+        wallet = cursor.fetchone() # fetchone() untuk satu hasil
+        # Kembalikan sebagai dictionary jika ditemukan, jika tidak, None
+        return dict(wallet) if wallet else None
+    except sqlite3.Error as e:
+        print(f"Error saat mengambil dompet by ID: {e}")
+        return None
+    finally:
+        conn.close()
+
+
