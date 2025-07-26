@@ -157,14 +157,14 @@ def remove_wallet_by_id(wallet_id, user_id):
 
 # --- FUNGSI-FUNGSI UNTUK PRICE ALERT ---
 
-def get_popular_alert_tokens(limit=5):
+def get_popular_alert_tokens(limit=10): #<-- Diubah menjadi 10
     """
     Mengambil daftar token yang paling banyak memiliki alert aktif dari semua pengguna.
     """
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        # Query ini akan menghitung berapa kali setiap token di-alert, mengurutkannya, dan mengambil 5 teratas
+        # Query ini akan menghitung berapa kali setiap token di-alert, mengurutkannya, dan mengambil 10 teratas
         cursor.execute('''
             SELECT token_symbol, chain, COUNT(*) as alert_count
             FROM price_alerts
