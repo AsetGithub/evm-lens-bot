@@ -208,3 +208,30 @@ def get_wallets_by_user(user_id):
         return []
     finally:
         conn.close()
+
+# Tambahkan fungsi ini ke dalam file database.py
+
+def add_wallet(user_id, address, chain, alias):
+    """Menambahkan dompet baru ke database untuk seorang pengguna."""
+    sql = '''
+        INSERT INTO wallets (user_id, address, chain, alias) 
+        VALUES (?, ?, ?, ?)
+    '''
+    params = (user_id, address.lower(), chain, alias)
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        conn.commit()
+        return True # Sukses
+    except sqlite3.IntegrityError:
+        # Error ini terjadi jika alamat dompet sudah ada (karena ada UNIQUE constraint)
+        print(f"Gagal menambahkan dompet: Alamat {address} sudah ada.")
+        return False
+    except sqlite3.Error as e:
+        print(f"Error saat menambahkan dompet: {e}")
+        return False
+    finally:
+        conn.close()
+
