@@ -1,4 +1,4 @@
-# bot/utils.py - Updated dengan Price Alert System
+# bot/utils.py - V2 Complete dengan Price Alert System
 # Indonesia: Utility functions dengan tambahan untuk price alerts
 
 import requests
@@ -10,7 +10,7 @@ def make_rpc_request(rpc_url, method, params):
     """Indonesia: Fungsi pembantu untuk membuat permintaan JSON-RPC."""
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     try:
-        response = requests.post(rpc_url, json=payload)
+        response = requests.post(rpc_url, json=payload, timeout=30)
         response.raise_for_status()
         return response.json()
     except Exception as e:
@@ -19,10 +19,11 @@ def make_rpc_request(rpc_url, method, params):
 
 def get_price(coingecko_id):
     """Indonesia: Mengambil harga dari CoinGecko API."""
-    if not coingecko_id: return None
+    if not coingecko_id: 
+        return None
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=usd"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
         return data.get(coingecko_id, {}).get('usd')
@@ -40,7 +41,7 @@ def get_main_menu_keyboard():
         ],
         [InlineKeyboardButton("📊 Cek Portfolio", callback_data='portfolio_start')],
         [
-            InlineKeyboardButton("🚨 Price Alerts", callback_data='alert_menu'),  # Indonesia: BARU
+            InlineKeyboardButton("🚨 Price Alerts", callback_data='alert_menu'),
             InlineKeyboardButton("⛽ Cek Gas Fee", callback_data='gas_start')
         ],
         [InlineKeyboardButton("⚙️ Pengaturan Notifikasi", callback_data='settings_menu')]
@@ -209,3 +210,94 @@ def format_large_number(number):
         return f"{number / 1_000:.2f}K"
     else:
         return f"{number:.2f}"
+
+def format_time_ago(timestamp):
+    """Indonesia: Format waktu relatif (misalnya '2 jam yang lalu')"""
+    import datetime
+    try:
+        if isinstance(timestamp, str):
+            dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        else:
+            dt = timestamp
+        
+        now = datetime.datetime.now(datetime.timezone.utc)
+        diff = now - dt.replace(tzinfo=datetime.timezone.utc)
+        
+        if diff.days > 0:
+            return f"{diff.days} hari lalu"
+        elif diff.seconds > 3600:
+            hours = diff.seconds // 3600
+            return f"{hours} jam lalu"
+        elif diff.seconds > 60:
+            minutes = diff.seconds // 60
+            return f"{minutes} menit lalu"
+        else:
+            return "Baru saja"
+    except:
+        return "Tidak diketahui"
+
+def create_price_alert_keyboard(current_price, symbol):
+    """Indonesia: Buat keyboard untuk setup alert cepat berdasarkan harga current"""
+    keyboard = []
+    
+    # Indonesia: Preset alert berdasarkan harga saat ini
+    if current_price:
+        # Alert naik 10%, 25%, 50%
+        keyboard.append([
+            InlineKeyboardButton(f"📈 +10% (${current_price * 1.1:.4f})", 
+                               callback_data=f"quick_alert_above_{current_price * 1.1:.6f}"),
+            InlineKeyboardButton(f"📈 +25% (${current_price * 1.25:.4f})", 
+                               callback_data=f"quick_alert_above_{current_price * 1.25:.6f}")
+        ])
+        
+        # Alert turun 10%, 25%
+        keyboard.append([
+            InlineKeyboardButton(f"📉 -10% (${current_price * 0.9:.4f})", 
+                               callback_data=f"quick_alert_below_{current_price * 0.9:.6f}"),
+            InlineKeyboardButton(f"📉 -25% (${current_price * 0.75:.4f})", 
+                               callback_data=f"quick_alert_below_{current_price * 0.75:.6f}")
+        ])
+    
+    # Manual setup
+    keyboard.append([InlineKeyboardButton("⚙️ Setup Manual", callback_data='create_new_alert')])
+    keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data='alert_menu')])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_popular_crypto_list():
+    """Indonesia: Daftar cryptocurrency populer untuk alert"""
+    return [
+        {'symbol': 'BTC', 'name': 'Bitcoin', 'coingecko_id': 'bitcoin'},
+        {'symbol': 'ETH', 'name': 'Ethereum', 'coingecko_id': 'ethereum'},
+        {'symbol': 'BNB', 'name': 'BNB', 'coingecko_id': 'binancecoin'},
+        {'symbol': 'MATIC', 'name': 'Polygon', 'coingecko_id': 'matic-network'},
+        {'symbol': 'ARB', 'name': 'Arbitrum', 'coingecko_id': 'arbitrum'},
+        {'symbol': 'OP', 'name': 'Optimism', 'coingecko_id': 'optimism'},
+    ]
+
+def create_notification_preview(alert_data, current_price):
+    """Indonesia: Buat preview notifikasi alert"""
+    symbol = alert_data['token_symbol']
+    alert_type = alert_data['alert_type']
+    
+    if alert_type == 'above':
+        emoji = "📈🚀"
+        condition = f"naik di atas ${alert_data['target_price']:,.6f}"
+    elif alert_type == 'below':
+        emoji = "📉⚠️"
+        condition = f"turun di bawah ${alert_data['target_price']:,.6f}"
+    else:  # percent
+        emoji = "📊🔔"
+        condition = f"berubah {alert_data['target_percentage']:+.1f}%"
+    
+    preview = (
+        f"🔔 **Preview Notifikasi:**\n\n"
+        f"{emoji} **ALERT HARGA TERCAPAI!**\n\n"
+        f"🪙 **{symbol}** \n"
+        f"💰 **Harga:** ${current_price:,.6f}\n"
+        f"🎯 **Kondisi:** {condition}\n"
+        f"⏰ **Waktu:** [Saat alert tercapai]\n\n"
+        f"*Ini adalah preview. Notifikasi akan dikirim saat kondisi terpenuhi.*"
+    )
+    
+    return preview
