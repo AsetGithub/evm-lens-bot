@@ -277,6 +277,25 @@ async def view_active_alerts(update: Update, context):
     
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
+# Tambahkan kode ini di dalam file bot/handlers/price_alerts.py
+
+async def popular_alerts(update: Update, context):
+    """Indonesia: Menampilkan daftar alert populer (fitur mendatang)"""
+    query = update.callback_query
+    await query.answer()
+
+    text = (
+        "📈 **Alert Populer**\n\n"
+        "Fitur ini sedang dalam pengembangan!\n\n"
+        "Nantikan daftar alert yang paling banyak digunakan oleh komunitas untuk mendapatkan ide trading."
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Kembali ke Menu Alert", callback_data='alert_menu')]
+    ]
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
 def get_popular_tokens_for_chain(chain):
     """Indonesia: Daftar token populer untuk setiap chain"""
     popular_tokens = {
