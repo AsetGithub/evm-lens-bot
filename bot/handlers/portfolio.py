@@ -102,10 +102,9 @@ async def get_portfolio_erc20(update: Update, context):
     text += f"\n---\n💰 **Total Estimasi Nilai: ${total_usd_value:,.2f}**"
     keyboard = [[InlineKeyboardButton("⬅️ Kembali", callback_data=f"portfolio_select_{wallet_id}")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
-    
 
 async def get_portfolio_nft(update: Update, context):
-    """Menampilkan portfolio NFT dengan harga dasar."""
+    """Menampilkan portfolio NFT dengan harga dasar (VERSI FINAL)."""
     query = update.callback_query; await query.answer()
     await query.edit_message_text("⏳ Sedang mengambil data NFT...")
     wallet_id = int(query.data.split('_')[2])
@@ -123,7 +122,6 @@ async def get_portfolio_nft(update: Update, context):
         await query.edit_message_text("Jaringan tidak didukung untuk NFT.")
         return
         
-    # Menggunakan URL API v2 yang lebih stabil untuk multi-chain
     api_url = f"https://{network_subdomain}.g.alchemy.com/nft/v2/{config.ALCHEMY_API_KEY}/getNFTs?owner={address}&withMetadata=true"
     
     try:
@@ -139,7 +137,10 @@ async def get_portfolio_nft(update: Update, context):
     if data and data.get('ownedNfts'):
         collections = {}
         for nft in data['ownedNfts']:
-            collection_name = nft.get('contract', {}).get('name', 'Koleksi Tidak Dikenal')
+            collection_name = nft.get('contract', {}).get('name', 'Koleksi Tanpa Nama')
+            if not collection_name or collection_name.strip() == '':
+                collection_name = 'Koleksi Tanpa Nama'
+
             if collection_name not in collections:
                 collections[collection_name] = []
             collections[collection_name].append(nft)
@@ -147,8 +148,17 @@ async def get_portfolio_nft(update: Update, context):
         for name, nfts in collections.items():
             text += f"<b>Koleksi: {name}</b> ({len(nfts)} item)\n"
             for nft in nfts[:3]:
-                nft_name = nft.get('name') or f"Token ID #{nft.get('tokenId')}"
+                token_id_hex = nft.get('id', {}).get('tokenId')
+                nft_name = nft.get('title') or nft.get('name')
+                
+                if not nft_name or nft_name.strip() == '':
+                    if token_id_hex:
+                        nft_name = f"Token ID #{int(token_id_hex, 16)}"
+                    else:
+                        nft_name = "Token Tidak Dikenali"
+
                 text += f"  - {nft_name}\n"
+
             if len(nfts) > 3:
                 text += f"  - ...dan {len(nfts) - 3} lainnya\n"
             text += "\n"
