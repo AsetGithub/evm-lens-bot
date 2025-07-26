@@ -163,3 +163,26 @@ def update_daily_alert_stats(action_type):
         conn.close()
 
 # Anda bisa menambahkan fungsi-fungsi lain seperti get_all_active_alerts, trigger_price_alert, dll. di sini jika diperlukan.
+# Tambahkan fungsi ini ke dalam file database.py
+
+def get_active_chains():
+    """
+    Mengambil daftar unik semua 'chain' yang memiliki alert aktif
+    dan belum ter-trigger untuk efisiensi monitoring.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT chain 
+            FROM price_alerts 
+            WHERE is_active = 1 AND is_triggered = 0
+        ''')
+        # Mengubah hasil query (list of tuples) menjadi list of strings
+        active_chains = [row['chain'] for row in cursor.fetchall()]
+        return active_chains
+    except sqlite3.Error as e:
+        print(f"Error mengambil active chains: {e}")
+        return []
+    finally:
+        conn.close()
